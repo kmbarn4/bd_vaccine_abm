@@ -1,0 +1,48 @@
+---
+title: "Bd_vaccine_ABM"
+author: "KM Barnett"
+date: "2/28/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+Current Functionality of Model
+-simple pond (not needed)
+-single pond & multipond landscape
+-2 species
+-do we want to initialize with tadpoles on every patch or tadpoles only on a certain number of patches?
+
+Minor To Dos:
+-add back the things I removed from the model
+-update Bd transmission submodel
+-zoospore shedding submodel
+
+Major To dos:
+-decide major outputs of interest
+    -emerging metmorph population size
+    -Bd infection intensity of emerging metamorphs
+
+Re-add to model:
+-tadpole movement
+-zoospore + zoosporangium decay
+-baseline tadpole mortality
+-metamorphs
+
+Should we remove?
+-Simple pond feature
+-Multi pond capabilities
+-eggs?
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
