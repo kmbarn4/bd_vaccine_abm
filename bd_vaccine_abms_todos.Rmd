@@ -10,32 +10,87 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## R Markdown
-Current Functionality of Model
--simple pond (not needed)
--single pond & multipond landscape
--2 species
--do we want to initialize with tadpoles on every patch or tadpoles only on a certain number of patches?
 
-Minor To Dos:
+#Current Functionality of Model
+-simple pond - leave in as a baseline for a "well-mixed population"
+-single pond
+-single species
+-within season
+-daily time step (tick = 1 day)
+-2 lifestages: tadpoles and metamorphs
+-mortality
+  -3 types of mortality
+    1) tadpole baseline mortality, 2) metamorph baseline mortality,
+    3) Bd-infection induced mortality (read Jager 2011 on this)
+-bd transmission (though this needs to be updated)
+-no immunity
+-tadpole movement:
+  - how far do tadpoles move? sphere of influence? list function
+  -implement it in a way that movement can be increased or decreased
+  -in principle, make it so that tadpole can move 1 to 5+ patches a day 
+-do we want to initialize with tadpoles on every patch or tadpoles only on a certain number of patches?
+    -equal probability for a tadpole to be on any patch but uniform distribution 
+    -intialize density rather than number of tadpoles 
+    -multinomial distribution
+-investigate: 
+    -when tadpoles with bd metamorphose, they have an spn = 100 rather than spn of myself
+    -what is the purpose of smax in tadpoles?
+          -preventing unrealistic runaway infections
+          -smax can be proportional to adult smax (may be proportional and may not be)
+          -smax on metamorphs is virulence, but smax on tadpoles can be a space limitation of mouthparts (s_k for carrying                 capacity)
+          -because they function differently/representing different processes, then they can be named different things
+    -metamorph movement - within a timescale step, how far do metamorphs move? land vs. pond
+
+#Minor To Dos:
+
+prioritization of what to implement
+1) frog ecology first
+2) bd dynamics
+3) bd dynamics and baseline/natural immunity
+4) vaccination
+
+-tadpole zoospore shedding submodel
+-conversion factor from taegan's paper on bd transition through metamorphosis, proportionality or just start with 10%
 -add back the things I removed from the model
 -update Bd transmission submodel
 -zoospore shedding submodel
+-Movement: how do we want to represent metamorph movement?
+  -run model with extremes of movement
+-negative tadpole age to simulate variation in hatching (multiple birth pulses, etc.)
+  -tadpoles with age less than zero do not do anything in submodel 
 
-Major To dos:
--decide major outputs of interest
+#Major To dos:
+-Observation: decide major outputs of interest
     -emerging metmorph population size
     -Bd infection intensity of emerging metamorphs
+        -at what time post-emergence? two weeks post-emergence or directly upon emergence?
+    -hidden toll - histogram of bd loads for dead frogs
+-Observation cont..: other outputs to keep track of:
+    -density of zoospores in the pool
+    -metamorph infection intensity upon metamorphosis, regardless of survival
+    -proportion of all mortality (in both tadpoles and metamorphs or just metamorphs?) attributable to bd
+        -not really though because no way to separate - becomes more population regulation by Bd
+        -just compare scenarios with and without bd
+    -focus observational outputs to ecologically relevant phenomenon
+-pattern matching outcomes:
+    -life stage distribution over time
+    -do the infection intensities follow a negative binomial distribution (with high degree of aggregation, especially in           tadpoles?
+    -does prevalence look realistic?
+    -does population size seem realistic? (i.e., not a tiny metamorph population size)
+-sensitivity analysis based on baseline model?
+  -relatively straightforward
+-how to represent immunity in the model?
+    -3 types of immunity:
+      1) baseline immunity, 2) immunity derived from infection clearance, and 3) vaccination immunity
+    -waning?
+-decide on scenarios to run
+-run simulations
+-analyze scenario outputs
 
-Re-add to model:
+#Re-add to model:
 -tadpole movement
 -zoospore + zoosporangium decay
--baseline tadpole mortality
--metamorphs
 
-Should we remove?
--Simple pond feature
--Multi pond capabilities
--eggs?
 
 ## Including Plots
 
