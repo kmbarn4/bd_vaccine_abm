@@ -184,13 +184,13 @@ to go
   random-seed behaviorspace-run-number
   if ticks = 90 [ stop ]
   ask tadpoles [
-    set aid aid + 1
+    set aid aid + 1                  ;adding a day to the tadpole's age
     if random-float 1 < 0.06 [       ;tadpole daily mortality probability estimated from Govindarajulu 2006
       die
     ]
   ]
   ask metamorphs [
-    set aid aid + 1
+    set aid aid + 1                   ;adding a day to the metamorph's age
     if random-float 1 < 0.09 [        ;baseline daily metamorph mortality
       die
     ]
