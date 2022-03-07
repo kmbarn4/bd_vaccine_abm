@@ -32,13 +32,11 @@ knitr::opts_chunk$set(echo = TRUE)
     -equal probability for a tadpole to be on any patch but uniform distribution 
     -intialize density rather than number of tadpoles 
     -multinomial distribution
--investigate: 
-    -when tadpoles with bd metamorphose, they have an spn = 100 rather than spn of myself
-    -what is the purpose of smax in tadpoles?
-          -preventing unrealistic runaway infections
-          -smax can be proportional to adult smax (may be proportional and may not be)
-          -smax on metamorphs is virulence, but smax on tadpoles can be a space limitation of mouthparts (s_k for carrying                 capacity)
-          -because they function differently/representing different processes, then they can be named different things
+-infections maintained through metamorphosis: spn on metamorphs is now 10% of what it was as tadpole (3/7/22)
+-sporangia loads are capped at s_k in tadpoles (sporangia carrying capacity) and smax in metamorphs (mortality threshold)
+      -undecided if smax should be proportional to s_k
+   
+#investigate   
     -metamorph movement - within a timescale step, how far do metamorphs move? land vs. pond
 
 #Minor To Dos:

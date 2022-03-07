@@ -339,8 +339,7 @@ to go
       let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
 
       let f-selfinfect round (0.05 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
-                                                                    ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
-                                                                    ;but they are prevented from re-entering the zoospore pool
+                                                                    ;because these tadpoles have maxxed out their infection loads, the
        set pz0 f-selfinfect ;pz0 + 1
       let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
 ;      ask patch-here [
