@@ -232,27 +232,26 @@ to go
       ]
     ]
   ]
-
+ ;tadpole movement submodel
   if SimplePond = FALSE [
-    let n-mobile-tadpoles round (0.10 * count tadpoles)
+    let n-mobile-tadpoles round (0.10 * count tadpoles)                           ;10% of tadpoles move to a different perimeter patch each tick
     ask n-of n-mobile-tadpoles tadpoles [
-      let my-pond-id [ pondid ] of patch-here
-      let nextpatch patches with [ pondid = my-pond-id and pp = 1 ]
-      move-to one-of nextpatch ;patches with [ pondid = my-pond-id ]
-      let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+      let nextpatch patches with [pp = 1]
+      move-to one-of nextpatch
+      let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]    ;check with ani about why direction matters
       let face-dir-x [ pxcor ] of dir-neighbor
       let face-dir-y [ pycor ] of dir-neighbor
       facexy face-dir-x face-dir-y
       rt random 40
       fd (0.32 + random-float 0.13)
       ]
-    ask metamorphs [
+    ask metamorphs [                                                             ;all metamorphs move to another perimeter patch
       move-to one-of patches with [ pond = 1  and pp = 1]
     ]
     ]
   let pondppatches patches with [ pond = 1 and pp = 1]
   ask pondppatches [
-    set prev-zsp zsp
+    set prev-zsp zsp                                                            ;store the last tick's zoospores as previous zoospores
     set pcolor scale-color red zsp 1000000 0
     ]
   if ticks > 0 [
@@ -498,6 +497,7 @@ to go
   tick
 end
 
+;populate patches with tadpoles
 to initialize-tadpole-pop
   sprout-tadpoles ini-tadpoles-per-pondpatch [
     set shape "frog top"
@@ -515,7 +515,7 @@ to initialize-tadpole-pop
     ]
 end
 
-
+;select a certain number of tadpoles in each patch to have Bd
 to initialize-Bd-tadpoles
   if Bd-inf-tadpoles-per-infpond > 0 [
     ask n-of Bd-inf-tadpoles-per-infpond tadpoles-here [
