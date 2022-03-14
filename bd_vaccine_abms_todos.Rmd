@@ -37,6 +37,7 @@ knitr::opts_chunk$set(echo = TRUE)
       -undecided if smax should be proportional to s_k
    
 #investigate   
+    -tadpole zoospore shedding submodel
     -metamorph movement - within a timescale step, how far do metamorphs move? land vs. pond
 
 #Minor To Dos:
@@ -49,9 +50,7 @@ prioritization of what to implement
 
 -tadpole zoospore shedding submodel
 -conversion factor from taegan's paper on bd transition through metamorphosis, proportionality or just start with 10%
--add back the things I removed from the model
 -update Bd transmission submodel
--zoospore shedding submodel
 -Movement: how do we want to represent metamorph movement?
   -run model with extremes of movement
 -negative tadpole age to simulate variation in hatching (multiple birth pulses, etc.)

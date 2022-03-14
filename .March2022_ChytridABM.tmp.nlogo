@@ -558,7 +558,7 @@ to initialize-tadpole-pop_2
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
-    set color 115
+    set color 65
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
     let face-dir-y [ pycor ] of dir-neighbor
@@ -578,7 +578,7 @@ to initialize-tadpole-pop_3
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
-    set color 125
+    set color 6
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
     let face-dir-y [ pycor ] of dir-neighbor
