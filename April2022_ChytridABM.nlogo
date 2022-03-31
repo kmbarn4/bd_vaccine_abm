@@ -449,11 +449,33 @@ to go
   ask pondppatches [
     set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
     ;print nspn
-    if zsp > 0 [                                                  ;zoospore-decay  loss rate of zoospore from the zoospore pool 0.248 – 0.252
-      let zsp-d round ((0.248 + random-float 0.005) * zsp)
-      set zsp (zsp - zsp-d)
-    ]
+    let frogs count tadpoles-here + count metamorphs-here
+    ;every pond patch will have a slightly different death and exposure rate
+    let z-death 0.248 + random-float 0.005 ;setting death rate of zoospores
+    let z-exp 1 + random-float 0.1         ;zoospore exposure - volume of water a zoospore searches per day
+    let z-contact round (zsp * (z-exp * frogs / (z-death + z-exp * frogs))*(1 - exp(-(z-death + z-exp * frogs))))      ;define number of zoospores that contact a host
+
+    ;z-death + z-exp*frogs is total loss of all zoospores for all reasons
+    ;(z-exp*frogs/(z-death + z-exp*frogs)) this is fraction of total zoospores that went into frog
+    ;(1 - exp(-(z-death + z-exp*frogs))) is the fraction of zoospores that either went into a frog OR died - fraction that did not go into water
+
+   ; if zsp > 0 [                                                  ;zoospore-decay  loss rate of zoospore from the zoospore pool 0.248 – 0.252
+  ;;;    let z-death 0.248 + random-float 0.005
+     ; let zsp-d round ((0.248 + random-float 0.005) * zsp)
+ ;     set zsp (zsp - zsp-d)
+;    ]
     ;set zsp (zsp + round (nspn * 17.8))                          ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI) ;
+
+   ;;changing the code so that zoospores decay simulaneously to transmission occuring within the day
+
+
+   ;number of frogs on patch exposed from random draw of multinomial distribution
+
+    ;finding out how many zoospores are expected to contact frogs at all
+    ;let prop-zsp	rnd:weighted-n-of-with-repeats
+
+    ;the issue with the below line for transmission is that it's essentially frequency dependent bc it's fixed
+    ;really proportion of zoospores encountering frogs depends on how many frogs there are
     let prop-zsp round (0.05 * zsp)                               ;proportion of zoospores that encounter hosts   from Farthing et al., 2021; .001
     let prop-zsp-host round (0.5 * prop-zsp)                      ;proportion of zoospores successfully infect host after encounter; .0001
     repeat prop-zsp-host [
@@ -558,7 +580,7 @@ to initialize-tadpole-pop_2
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
-    set color 65
+    set color 115
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
     let face-dir-y [ pycor ] of dir-neighbor
@@ -578,7 +600,7 @@ to initialize-tadpole-pop_3
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
-    set color 6
+    set color 125
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
     let face-dir-y [ pycor ] of dir-neighbor
