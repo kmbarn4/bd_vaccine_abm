@@ -456,7 +456,7 @@ to go
     ;set zsp (zsp + round (nspn * 17.8))                          ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI) ;
     let prop-zsp round (0.05 * zsp)                               ;proportion of zoospores that encounter hosts   from Farthing et al., 2021; .001
     let prop-zsp-host round (0.5 * prop-zsp)                      ;proportion of zoospores successfully infect host after encounter; .0001
-    repeat prop-zsp-host [
+    repeat prop-zsp-host [            ;prob of contact is not dependent on hosts ******
       if any? turtles-here [
         ask one-of turtles-here [
           set pz0 pz0 + 1
