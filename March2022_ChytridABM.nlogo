@@ -204,11 +204,11 @@ to go
       if spn >= 8000 [
         set color red
         ]
-      if spn = 0 [
-        set bd 0
-        set color green
-        ]
       tadpole-zsp-shedding-and-reinfection
+      if spn = 0 [
+      set bd 0
+      set color green
+        ]
         ]
     let maxbd-tadpoles tadpoles with [ bd = 1  and spn >= s_k ]      ;maxbd-tadpoles are tadpoles that have met or exceeded sporangia carrying capacity
     ask maxbd-tadpoles [                                             ;maxbd-tadpoles cannot get reinfected but can still contribute to the zoospore pool and clear sporangia
@@ -228,12 +228,12 @@ to go
       ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
         ;set color red
         ;]
+      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
       if spn = 0 [            ;uninfected metamorphs appear green
-       ;;;QUESTION - should this ^^ come before sporangia loss rate???
+       ;;;QUESTION - should this ^^ come AFTER sporangia loss rate right???
         set bd 0
         set color green
         ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
       let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
       let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
       set pz0 f-selfinfect ;pz0 + 1
@@ -260,7 +260,6 @@ to go
 end
 
 ;procedures below
-
 
 ;populate patches with tadpoles
 to initialize-tadpole-pop
@@ -762,7 +761,7 @@ false
 "" ""
 PENS
 "pen-1" 1.0 0 -13345367 true "" "if any? tadpoles [ plot ( sum [ spn ] of tadpoles) / count tadpoles ]"
-"pen-2" 1.0 0 -8053223 true "" "plot (sum [ spn ] of metamorphs) / (count metamorphs + 1)"
+"pen-2" 1.0 0 -8053223 true "" "if any? metamorphs [plot (sum [ spn ] of metamorphs) / (count metamorphs + 1)]"
 
 SLIDER
 15
