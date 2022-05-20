@@ -244,13 +244,14 @@ to go
       ]
  ; ask pondppatches with [zsp > 0] [
     ;asking infected pond perimeter patches
+   ask patches with [pond = 1] [
+    set pcolor scale-color red zsp 1000000 0
+    ]
  ask patches with [zsp > 0] [
   infection-step
   ]
-  ask patches with [pond = 1] [
-    set pcolor scale-color red zsp 1000000 0
-    ]
-   ask turtles with [spn > 0] [   ;WRONG PLACE?
+  ; ask turtles with [spn > 0] [   ;WRONG PLACE?
+  ask turtles with [pz0 > 0] [
     set bd 1
     set color white
   ]
@@ -276,7 +277,7 @@ to initialize-tadpole-pop
     set imm random 100
     set s_k (9890 + random 231)
     set est 0.1 + random-float 0.1 ;variation in establishment
-    set expo 0.5 + random-float 1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 65
@@ -311,7 +312,7 @@ to initialize-tadpole-pop_2
     set imm random 100
     set s_k (9890 + random 231)
     set est 0.1 + random-float 0.1 ;variation in establishment
-    set expo 0.5 + random-float 1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 115
@@ -335,7 +336,7 @@ to initialize-tadpole-pop_3
     set imm random 100
     set s_k (9890 + random 231)
     set est 0.1 + random-float 0.1 ;variation in establishment
-    set expo 0.5 + random-float 1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.02 + random-float 0.1  ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 125
@@ -607,8 +608,8 @@ SLIDER
 ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
-100000
-500.0
+1000
+200.0
 10
 1
 NIL
@@ -700,9 +701,9 @@ Zoospore count
 days
 Zoospores
 0.0
-10.0
+90.0
 0.0
-10.0
+200000.0
 true
 false
 "" ""
@@ -865,7 +866,7 @@ No. of hosts
 0.0
 4000.0
 0.0
-50.0
+20.0
 true
 false
 "" ""
