@@ -192,7 +192,7 @@ to go
   let pondppatches patches with [ pond = 1 and pp = 1]
   ask pondppatches [
     set prev-zsp zsp                                                            ;store the last tick's zoospores as previous zoospores
-    set pcolor scale-color red zsp 1000000 0
+  ;  set pcolor scale-color red zsp 1000000 0
     ]
     let bd-tadpoles tadpoles with [ bd = 1  and spn < s_k ]
 
@@ -247,6 +247,9 @@ to go
  ask patches with [zsp > 0] [
   infection-step
   ]
+  ask patches with [pond = 1] [
+    set pcolor scale-color red zsp 1000000 0
+    ]
    ask turtles with [spn > 0] [   ;WRONG PLACE?
     set bd 1
     set color white
@@ -606,7 +609,7 @@ ini-tadpoles-per-pondpatch
 0
 100000
 500.0
-100
+10
 1
 NIL
 HORIZONTAL

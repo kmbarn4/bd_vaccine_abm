@@ -247,6 +247,7 @@ to go
  ask patches with [zsp > 0] [
   infection-step
   ]
+ ask patches with [pond =
    ask turtles with [spn > 0] [   ;WRONG PLACE?
     set bd 1
     set color white
