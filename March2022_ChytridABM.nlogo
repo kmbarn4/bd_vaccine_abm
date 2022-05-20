@@ -134,7 +134,7 @@ to setup
 end
 
 to go
-  random-seed behaviorspace-run-number
+;  random-seed behaviorspace-run-number
   if ticks = 90 [ stop ]
   ask tadpoles [
     set aid aid + 1                  ;adding a day to the tadpole's age
@@ -214,6 +214,7 @@ to go
     ask maxbd-tadpoles [                                             ;maxbd-tadpoles cannot get reinfected but can still contribute to the zoospore pool and clear sporangia
       if spn >= 8000 [                                               ;set these tadpoles as red if their sporangia load is above 8000
         set color red
+        set est 0  ;this prevents maxbd-tadpoles from getting reinfected, but they can still be exposed to Bd
         ]
         max-bd-tadpole-shedding
     ]
@@ -241,7 +242,9 @@ to go
         set zsp zsp + (zsp-release - f-selfinfect)
         ]
       ]
-  ask pondppatches with [zsp > 0] [         ;asking infected pond perimeter patches
+ ; ask pondppatches with [zsp > 0] [
+    ;asking infected pond perimeter patches
+ ask patches with [zsp > 0] [
   infection-step
   ]
    ask turtles with [spn > 0] [   ;WRONG PLACE?
@@ -387,14 +390,15 @@ to metamorphosis
           set infprob [infprob] of myself
 ;          set new-pz0 [new-pz0] of myself
           if bd = 1 [
-;             set pz0 0.5 * ([ pz0 ] of myself)
-;             set pz1 0.5 * ([ pz1 ] of myself)
-;             set pz2 0.5 * ([ pz2 ] of myself)
-;             set pz3 0.5 * ([ pz3 ] of myself)
-;             set pz4 0.5 * ([ pz4 ] of myself)
-;             set pz5 0.5 * ([ pz5 ] of myself)
-;             set pz6 0.5 * ([ pz6 ] of myself)
-;             set pz7 0.5 * ([ pz7 ] of myself)
+;previously all pz0-pz7 was commented out so prezoosporangia were not carried through metamorphosis
+             set pz0 0.5 * ([ pz0 ] of myself)
+             set pz1 0.5 * ([ pz1 ] of myself)
+             set pz2 0.5 * ([ pz2 ] of myself)
+             set pz3 0.5 * ([ pz3 ] of myself)
+             set pz4 0.5 * ([ pz4 ] of myself)
+             set pz5 0.5 * ([ pz5 ] of myself)
+             set pz6 0.5 * ([ pz6 ] of myself)
+             set pz7 0.5 * ([ pz7 ] of myself)
              set spn 0.5 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 50% for now** maintain spn load proportional to tadpole infection intensity
           ]
           set smax (16000 + random 231)
@@ -447,7 +451,6 @@ to max-bd-tadpole-shedding
 end
 
 to infection-step
-;NOTE: this still allows max-bd-tadpoles to get reinfected but... we'll fix that later
     set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
     ;print nspn
     let z-mort 0.284 + random-float 0.5
@@ -602,7 +605,7 @@ ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
 100000
-200.0
+500.0
 100
 1
 NIL
@@ -761,7 +764,7 @@ false
 "" ""
 PENS
 "pen-1" 1.0 0 -13345367 true "" "if any? tadpoles [ plot ( sum [ spn ] of tadpoles) / count tadpoles ]"
-"pen-2" 1.0 0 -8053223 true "" "if any? metamorphs [plot (sum [ spn ] of metamorphs) / (count metamorphs + 1)]"
+"pen-2" 1.0 0 -8053223 true "" "plot (sum [ spn ] of metamorphs) / (count metamorphs + 1)"
 
 SLIDER
 15
@@ -867,9 +870,9 @@ PENS
 "default" 1.0 1 -16777216 true "" "histogram [ spn ] of metamorphs with [bd = 1]"
 
 PLOT
-389
+221
 388
-589
+421
 538
 pz0 per metamorph
 pz0 per meta
@@ -883,6 +886,24 @@ false
 "" ""
 PENS
 "default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of metamorphs"
+
+PLOT
+435
+388
+635
+538
+pz0 per tadpole
+pz0 per tadpole
+no. tadpoles
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of tadpoles"
 
 @#$#@#$#@
 ## WHAT IS IT?

@@ -18,12 +18,13 @@ knitr::opts_chunk$set(echo = TRUE)
 -within season
 -daily time step (tick = 1 day)
 -2 lifestages: tadpoles and metamorphs
+-birth pulses are possible (1, 2 or 3 pulses)
 -mortality
   -3 types of mortality
     1) tadpole baseline mortality, 2) metamorph baseline mortality,
     3) Bd-infection induced mortality (read Jager 2011 on this)
--bd transmission (though this needs to be updated)
--no immunity
+-bd transmission using draws from multinomial distribution
+-no immunity but tadpoles and metamorphs can vary in their exposure and probability of successful zoospore establishment
 -tadpole movement:
   - how far do tadpoles move? sphere of influence? list function
   -implement it in a way that movement can be increased or decreased
@@ -31,14 +32,13 @@ knitr::opts_chunk$set(echo = TRUE)
 -do we want to initialize with tadpoles on every patch or tadpoles only on a certain number of patches?
     -equal probability for a tadpole to be on any patch but uniform distribution 
     -intialize density rather than number of tadpoles 
-    -multinomial distribution
 -infections maintained through metamorphosis: spn on metamorphs is now 10% of what it was as tadpole (3/7/22)
 -sporangia loads are capped at s_k in tadpoles (sporangia carrying capacity) and smax in metamorphs (mortality threshold)
       -undecided if smax should be proportional to s_k
    
 #investigate   
-    -tadpole zoospore shedding submodel
     -metamorph movement - within a timescale step, how far do metamorphs move? land vs. pond
+        -currently metamorphs are not getting infected-- could this be due to low exposure (in that metamorphs are not            moving between patches enough to get exposed) or low host density (too few metamorphs)?
 
 #Minor To Dos:
 
@@ -47,18 +47,13 @@ prioritization of what to implement
 2) bd dynamics
 3) bd dynamics and baseline/natural immunity
 4) vaccination
-
--tadpole zoospore shedding submodel
 -conversion factor from taegan's paper on bd transition through metamorphosis, proportionality or just start with 10%
--update Bd transmission submodel
 -Movement: how do we want to represent metamorph movement?
   -run model with extremes of movement
--negative tadpole age to simulate variation in hatching (multiple birth pulses, etc.)
-  -tadpoles with age less than zero do not do anything in submodel 
 
 #Major To dos:
 -Observation: decide major outputs of interest
-    -emerging metmorph population size
+    -emerging metamorph population size
     -Bd infection intensity of emerging metamorphs
         -at what time post-emergence? two weeks post-emergence or directly upon emergence?
     -hidden toll - histogram of bd loads for dead frogs
@@ -85,8 +80,7 @@ prioritization of what to implement
 -analyze scenario outputs
 
 #Re-add to model:
--tadpole movement
--zoospore + zoosporangium decay
+
 
 
 ## Including Plots

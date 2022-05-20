@@ -1,5 +1,6 @@
 ;Chytridiomycosis ABM
 
+extensions [rnd]
 
 globals
 [
@@ -23,6 +24,7 @@ patches-own
   prev-zsp                                        ;number of zoospores in the previous time step (to calculate lambda)
   pondid                                          ;pond number
   pp                                              ;pond perimeter
+  new-infections                                  ;output of multinomial draws, represents a list where for each time a host appears in the list it has a new zoospore successfully infecting it
 
 ]
 
@@ -33,6 +35,10 @@ metamorphs-own
   spn                                            ;sporangia load
   imm                                            ;immunity
   smax                                           ;maximum sporangia load - mortality occurs when sporangia load exceeds smax
+  est
+  expo
+  infprob
+  new-pz0                                        ;temporary new pz0 for each patch
   pz0                                            ;prezoosporangium (pz0-pz7 are used to create a 7 day lag period from zoospore establishment till the maturation of an infectious sporangia)
   pz1
   pz2
@@ -52,6 +58,10 @@ tadpoles-own
   spn                                           ;sporangia load
   imm                                           ;immunity
   s_k                                           ;maximum number of zoospores on tadpoles due to space limitation (sporangia carrying capacity)
+  est
+  expo
+  infprob
+  new-pz0
   pz0                                           ;prezoosporangium (pz0-pz7 are used to create a 7 day lag period from zoospore establishment till the maturation of an infectious sporangia)
   pz1
   pz2
@@ -63,19 +73,14 @@ tadpoles-own
   vac
   b_cohort                                      ;specifies birth cohort if modeling birth pulses
 ]
-;prezsp-own
-;[
-  ;host                                            ;who of host infected
-  ;counter                                         ;7 days until sporangia develops
-;]
-;
+
 to setup
   ca
   ifelse SimplePond = TRUE
   [ resize-world 0 3 0 3
     set-patch-size 80 ]
   [ set-patch-size 17     ;5
-    resize-world 0 20 0 20 ]   ;0 99 0 99
+    resize-world 0 20 0 20 ]
 
   ask patches [
     set pcolor brown
@@ -91,11 +96,8 @@ to setup
     [ set border 1 ]
     [ set border 0 ]
   ]
-
-
   ;define non-border patches (nbpatches) because we don't want pond patches on the border
   let nbpatches patches with [ border = 0 ]
-
   ifelse SimplePond = TRUE
   [ ask one-of nbpatches [
     set pond 1
@@ -105,45 +107,21 @@ to setup
     initialize-Bd-tadpoles
     ]
     ]
-  [ let counter 0
-    ask one-of nbpatches [
-      set pond 1
-      set counter counter + 1
-      set pcolor blue
-      ;below lines specify the size of the pond (mean and variance)
-      let pondsize round random-normal 135 18
-      repeat pondsize [
-        ask min-one-of patches with [ pond = 0 and border = 0 ] [ distance myself ] [
-          set pond 1
-          set pcolor blue
-          ]
-        ]
-      ]
+  [
+  create-pond
   ]
     ;below code specifies which patches are on the perimeter.
-    ask patches with [ pond = 1 ] [
+  ask patches with [ pond = 1 ] [
      if count neighbors4 with [ pond = 0 ] > 0 [
         set pp 1
         set pcolor 107
       ]
   ]
-   ;reports the shoreline in the command center (if I want that)
     ask patches with [pp = 1][
-      if count neighbors4 with [ pond = 0 ] = 4 [
-        set shoreline shoreline + 4
-      ]
-      if count neighbors4 with [ pond = 0] = 3 [
-        set shoreline shoreline + 3
-      ]
-      if count neighbors4 with [ pond = 0] = 2 [
-        set shoreline shoreline + 2
-      ]
-      if count neighbors4 with [ pond = 0] = 1 [
-        set shoreline shoreline + 1
-      ]
+    ;reports the shoreline in the command center (if I want that)
+  ;  calculate-shoreline
     ]
    ; print shoreline  ;in case I want to know what the shoreline/perimeter is
-
     let perimeterp patches with [ pp = 1 ]
     ask perimeterp [
      initialize-tadpole-pop
@@ -151,39 +129,12 @@ to setup
       initialize-Bd-tadpoles
     ]
   ]
-
-
-  ;#####Vaccination coverage 100%: all susceptible (imm > 66 to imm < 66 and imm > 33 to imm < 33)
-;  ask frogs with [ imm > 66 and vac = 0 ] [
-;    set imm random 67
-;    set vac 1
-;    ]
-;  ask frogs with [ imm > 33 and imm < 67 and vac = 0 ] [
-;    set imm random 34
-;    set vac 1
-;    ]
-    ;]
-
-;  if Bd-inf-frogs > 0 [
-;    ask n-of Bd-inf-frogs frogs [
-;      set bd 1
-;      set color white
-;      set spn 100
-;    ]
-;  ]
-
-  ;if not file-exists? (word "results/baseline_bddynamics" date-and-time ".csv") [
-  if not file-exists? (word "results/no_Bd_baseline_bddynamics.csv") [
-   ; file-open (word "results/baseline_bddynamics" date-and-time ".csv")
-    file-open (word "results/no_Bd_baseline_bddynamics.csv")
-    file-print "day, N_tadpoles, INF_tadpoles, dead_frogs, zspn, zsp, prevzsp, lambda, zspn-inc, N_metamorphs, INF_metamorphs"  ;dead_frogs includes all life stages (tadpoles, metas, frogs) dead with Bd but really only metas are dying of Bd
-    file-close
-    ]
+ ;create-data-file
   reset-ticks
 end
 
 to go
-  random-seed behaviorspace-run-number
+;  random-seed behaviorspace-run-number
   if ticks = 90 [ stop ]
   ask tadpoles [
     set aid aid + 1                  ;adding a day to the tadpole's age
@@ -218,374 +169,100 @@ to go
   ]
 
   if any? tadpoles with [ aid > 55 ] [  ;initiate metamorphosis in (some) tadpoles greater than 55
-    ask tadpoles with [ aid > 55 ] [
-      if random-float 1 < 0.11 [
-        hatch-metamorphs 1 [
-          set aid 1
-          set b_cohort [ b_cohort ] of myself     ;keep track of birth cohort identity
-          set bd [ bd ] of myself       ;maintain bd infection through metamorphosis (McMahon & Rohr, 2015)
-          if bd = 1 [
-            set spn 0.1 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 10% for now** maintain spn load proportional to tadpole infection intensity
-          ]
-          set smax (16000 + random 231)
-          set shape "frog top"
-          set size 0.4
-          set color brown
-          ]
-        die                             ;remove tadpole from population once it's metamorphosed
-        ]
+  ask tadpoles with [ aid > 55 ] [
+  if random-float 1 < 0.11 [
+  metamorphosis
     ]
     ]
+  ]
   if ticks = 75 [
     if any? tadpoles [
-      ask tadpoles [
-        hatch-metamorphs 1 [
-          set aid 1
-          set b_cohort [ b_cohort ] of myself     ;keep track of birth cohort identity
-          set bd [ bd ] of myself
-          if bd = 1 [
-             set spn 0.1 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 10% for now**
-          ]
-          set smax (40000 + random 231)
-          set shape "frog top"
-          set size 0.4
-          set color brown
-          ]
-        die
+    ask tadpoles[
+    metamorphosis
       ]
     ]
   ]
  ;tadpole movement submodel
   if SimplePond = FALSE [
-    let n-mobile-tadpoles round (0.10 * count tadpoles)                           ;10% of tadpoles move to a different perimeter patch each tick
-    ask n-of n-mobile-tadpoles tadpoles [
-      let nextpatch patches with [pp = 1]
-      move-to one-of nextpatch
-      let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]    ;check with ani about why direction matters
-      let face-dir-x [ pxcor ] of dir-neighbor
-      let face-dir-y [ pycor ] of dir-neighbor
-      facexy face-dir-x face-dir-y
-      rt random 40
-      fd (0.32 + random-float 0.13)
-      ]
+    tadpoles-move
     ask metamorphs [                                                             ;all metamorphs move to another perimeter patch
       move-to one-of patches with [ pond = 1  and pp = 1]
     ]
-    ]
+  ]
   let pondppatches patches with [ pond = 1 and pp = 1]
   ask pondppatches [
     set prev-zsp zsp                                                            ;store the last tick's zoospores as previous zoospores
-    set pcolor scale-color red zsp 1000000 0
+  ;  set pcolor scale-color red zsp 1000000 0
     ]
-  if ticks > 0 [
-;    if not any? tadpoles [
-;      stop
-;      ]
-    ;let bd-tadpoles tadpoles with [ bd = 1  and spn < 8000]            ;attempting to prevent tadpoles with spn loads greater than 8000 from increasing infection load
     let bd-tadpoles tadpoles with [ bd = 1  and spn < s_k ]
+
+;REMINDER: double check that bd-max-tadpoles is implemented correctly - do pz0 infections continue to progress?
+
     ask bd-tadpoles
     [
-      let z1 pz0
-      let z2 pz1
-      let z3 pz2
-      let z4 pz3
-      let z5 pz4
-      let z6 pz5
-      let z7 pz6
-      set pz1 z1
-      set pz2 z2
-      set pz3 z3
-      set pz4 z4
-      set pz5 z5
-      set pz6 z6
-      set pz7 z7
-      set pz0 0
-      set spn spn + pz7
-      set zspn-inc zspn-inc + pz7
-
-;      if spn >= s_k [
-;        set bd-mortality bd-mortality + 1
-;        die
-;        ]
+      update-infections
       if spn >= 8000 [
         set color red
         ]
+      tadpole-zsp-shedding-and-reinfection
       if spn = 0 [
-        set bd 0
-        set color green
-        ;stop
+      set bd 0
+      set color green
         ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
-      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-
-    ;  let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
-      ;;#####                                                    ;simulating heterogenous susceptibility in frogs
-;      let f-selfinfect 0
-;      ifelse imm > 66
-;      [ set f-selfinfect round (0.05 * zsp-release) ]                    ;fully susceptible
-;      [ ifelse imm > 33
-;        [ set f-selfinfect round (0.5 * 0.05 * zsp-release) ]
-;        [ set f-selfinfect round (0.25 * 0.05 * zsp-release) ]
-;      ]
-      ;####
-      ;let hostwho who
-      ;hatch-prezsp f-selfinfect [
-        ;ht
-        ;set counter -7
-        ;set host hostwho
-        ;]
-      set pz0 f-selfinfect ;pz0 + 1
-
-      extensions [rnd]
-turtles-own [z0 est expo infprob]
-patches-own [zsp]
-
-;BELOW IS MY ATTEMPT AT MULTINOMIAL TRANSMISSION MODEL
-to setup
-  ca
-  create-turtles 50
-  ask turtles [
-    set est 0.1 + random-float 0.1
-    set expo 1
-    set infprob est * expo
-  ]
-  ask patches [set zsp random 100]
-  reset-ticks
-end
-
- to go
-  ask patch 0 0 [let z-mort 0.284 + random-float 0.5
-  let frogs count turtles
-  let total-expo sum [expo] of turtles
-  let p-left-in-water exp ( - (z-mort + total-expo) )
-  let surviving-in_water round(zsp * p-left-in-water)
-  let successful-infections round( zsp * (1 - p-left-in-water) * (sum [expo * est] of turtles) / (z-mort + total-expo))
-    show rnd:weighted-n-of-with-repeats successful-infections turtles [infprob]
-  ]
-  tick
-end
-
-
-
-; BELOW IS OUTDATED TRANSMISSION MODEL
-;      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
-;;      ask patch-here [
-;;      set zsp zsp + (zsp-release - f-selfinfect)
-;;        ]
-;      ask patch-here [
-;      set zsp zsp + same-patch-zsp
-;        ]
-;      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
-;      ask one-of patches in-radius 1 [
-;      set zsp zsp + near-shallow-patch-zsp
-;        ]
-;      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
-;      ;ask min-one-of patches [distance myself with [pond = 1 and pp = 0]] [
-;      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
-;      set zsp zsp + nearest-deep-patch-zsp
-;        ]
-;    ]
-
-
+        ]
     let maxbd-tadpoles tadpoles with [ bd = 1  and spn >= s_k ]      ;maxbd-tadpoles are tadpoles that have met or exceeded sporangia carrying capacity
     ask maxbd-tadpoles [                                             ;maxbd-tadpoles cannot get reinfected but can still contribute to the zoospore pool and clear sporangia
       if spn >= 8000 [                                               ;set these tadpoles as red if their sporangia load is above 8000
         set color red
+        set est 0  ;this prevents maxbd-tadpoles from getting reinfected, but they can still be exposed to Bd
         ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)       ;sporangia loss rate 0.148 – 0.153 per day
-
-
-  ; BELOW IS OUTDATED TRANSMISSION MODEL FOR TADPOLES WITH MAX SPN
-;      let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-;
-;      let f-selfinfect round (0.05 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
-;                                                                    ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
-;                                                                    ;but they are prevented from re-entering the zoospore pool
-;       set pz0 f-selfinfect ;pz0 + 1
-;      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
-;;      ask patch-here [
-;;      set zsp zsp + (zsp-release - f-selfinfect)
-;;        ]
-;      ask patch-here [
-;      set zsp zsp + same-patch-zsp
-;        ]
-;      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
-;      ask one-of patches in-radius 1 [
-;      set zsp zsp + near-shallow-patch-zsp
-;        ]
-;      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
-;      ;ask min-one-of patches [distance myself with [pond = 1 and pp = 0]] [
-;      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
-;      set zsp zsp + nearest-deep-patch-zsp
-        ]
+        max-bd-tadpole-shedding
     ]
-
     let bd-metamorphs metamorphs with [ bd = 1 ]
     ask bd-metamorphs
-    [                 ;upon establishment, a zoospore takes ~7 days to mature into a sporangia
-      let z1 pz0
-      let z2 pz1
-      let z3 pz2
-      let z4 pz3
-      let z5 pz4
-      let z6 pz5
-      let z7 pz6
-      set pz1 z1
-      set pz2 z2
-      set pz3 z3
-      set pz4 z4
-      set pz5 z5
-      set pz6 z6
-      set pz7 z7
-      set pz0 0
-      set spn spn + pz7
-      set zspn-inc zspn-inc + pz7
-
-      if spn >= smax [
+    [
+     update-infections
+     if spn >= smax [
         set bd-mortality bd-mortality + 1
         die
         ]
       ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
         ;set color red
         ;]
+      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
       if spn = 0 [            ;uninfected metamorphs appear green
+       ;;;QUESTION - should this ^^ come AFTER sporangia loss rate right???
         set bd 0
         set color green
         ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
       let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-
-    ; BELOW IS OUTDATED TRANSMISSION MODEL FOR INFECTED METAMORPHS
-      ;let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
-
-
-      ;;#####                                                    ;simulating heterogenous susceptibility in frogs
-;      let f-selfinfect 0
-;      ifelse imm > 66
-;      [ set f-selfinfect round (0.05 * zsp-release) ]                    ;fully susceptible
-;      [ ifelse imm > 33
-;        [ set f-selfinfect round (0.5 * 0.05 * zsp-release) ]
-;        [ set f-selfinfect round (0.25 * 0.05 * zsp-release) ]
-;      ]
-      ;####
-      ;let hostwho who
-      ;hatch-prezsp f-selfinfect [
-        ;ht
-        ;set counter -7
-        ;set host hostwho
-        ;]
-
-
-   ;   set pz0 f-selfinfect ;pz0 + 1
-    ;  ask patch-here [
-;        set zsp zsp + (zsp-release - f-selfinfect)
-;        ]
-;      ]
-;    ]
-;  let pondpatches patches with [ pond = 1 ]
-;  ask pondpatches [
-;    set prev-zsp zsp
-;    ]
-  ask pondppatches [
-    set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
-    ;print nspn
-    let frogs count tadpoles-here + count metamorphs-here
-
-
-
-   ;BELOW IS EARLIER MULTINOMIAL TRANSMISSION ATTEMPT (MARCH 14TH)
-    ;every pond patch will have a slightly different death and exposure rate
-;    let z-death 0.248 + random-float 0.005 ;setting death rate of zoospores
-;    let z-exp 1 + random-float 0.1         ;zoospore exposure - volume of water a zoospore searches per day
-;    let z-contact round (zsp * (z-exp * frogs / (z-death + z-exp * frogs))*(1 - exp(-(z-death + z-exp * frogs))))      ;define number of zoospores that contact a host
-
-    ;z-death + z-exp*frogs is total loss of all zoospores for all reasons
-    ;(z-exp*frogs/(z-death + z-exp*frogs)) this is fraction of total zoospores that went into frog
-    ;(1 - exp(-(z-death + z-exp*frogs))) is the fraction of zoospores that either went into a frog OR died - fraction that did not go into water
-
-   ; if zsp > 0 [                                                  ;zoospore-decay  loss rate of zoospore from the zoospore pool 0.248 – 0.252
-  ;;;    let z-death 0.248 + random-float 0.005
-     ; let zsp-d round ((0.248 + random-float 0.005) * zsp)
- ;     set zsp (zsp - zsp-d)
-;    ]
-    ;set zsp (zsp + round (nspn * 17.8))                          ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI) ;
-
-   ;;changing the code so that zoospores decay simulaneously to transmission occuring within the day
-
-
-   ;number of frogs on patch exposed from random draw of multinomial distribution
-
-    ;finding out how many zoospores are expected to contact frogs at all
-    ;let prop-zsp	rnd:weighted-n-of-with-repeats
-
-    ;the issue with the below line for transmission is that it's essentially frequency dependent bc it's fixed
-    ;really proportion of zoospores encountering frogs depends on how many frogs there are
-;    let prop-zsp round (0.05 * zsp)                               ;proportion of zoospores that encounter hosts   from Farthing et al., 2021; .001
-;    let prop-zsp-host round (0.5 * prop-zsp)                      ;proportion of zoospores successfully infect host after encounter; .0001
-;    repeat prop-zsp-host [
-;      if any? turtles-here [
-;        ask one-of turtles-here [
-;          set pz0 pz0 + 1
-;          set bd 1                                               ;simulating heterogenous susceptibility
-;          set color white
-;
-
-          ;####
-;          ifelse imm > 66
-;          [ set bd 1 set pz0 pz0 + 1 ]
-;          [ ifelse imm > 33
-;            [ if random-float 1 < 0.51 [
-;              set bd 1 set pz0 pz0 + 1
-;              ]
-;            ]
-;            [ if random-float 1 < 0.26 [
-;              set bd 1 set pz0 pz0 + 1
-;              ]
-;              ]
-;            ]
-          ;###
-;          let hostwho who
-;          hatch-prezsp 1 [
-;            ht
-;            set counter -7
-;            set host hostwho
-;            ]
-          ]
+      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
+      set pz0 f-selfinfect ;pz0 + 1
+      ask patch-here [
+        set zsp zsp + (zsp-release - f-selfinfect)
         ]
-    ]
-    set zsp (zsp - prop-zsp)
-    ]
-
-;  ask prezsp [
-;    set counter counter + 1
-;    if counter = 0 [
-;      let hostid host
-;      if any? frogs with [ who = hostid ] [
-;        ask frog hostid [
-;          set bd 1
-;          set color white
-;          set spn spn + 1
-;          set zspn-inc zspn-inc + 1                            ;update incidence counter
-;          ]
-;      ]
-;      die
-;    ]
-;  ]
-
+      ]
+ ; ask pondppatches with [zsp > 0] [
+    ;asking infected pond perimeter patches
+ ask patches with [zsp > 0] [
+  infection-step
+  ]
+   ask turtles with [spn > 0] [   ;WRONG PLACE?
+    set bd 1
+    set color white
+  ]
   if ticks > 1 [
     if sum [ prev-zsp ] of patches > 0 [
       set lambda-zsp precision (sum [ zsp ] of patches / sum [ prev-zsp ] of patches) 2
       ]
     ]
   set n-zspn sum [ spn ] of tadpoles
-  file-open (word "results/no_Bd_baseline_bddynamics.csv")
-  ;file-open (word "results/baseline_bddynamics" date-and-time ".csv")
-  file-type ticks file-type "," file-type count tadpoles file-type "," file-type count tadpoles with [ bd = 1 ] file-type "," file-type bd-mortality file-type "," file-type n-zspn file-type ","file-type sum [ zsp ] of patches file-type "," file-type sum [ prev-zsp ] of patches file-type "," file-type lambda-zsp file-type "," file-type zspn-inc file-type "," file-type count metamorphs file-type "," file-type count metamorphs with [ bd = 1 ] file-type ","
-  file-print ""
-  file-close
   set zspn-inc 0
+  ;write-data-file
   tick
 end
+
+;procedures below
 
 ;populate patches with tadpoles
 to initialize-tadpole-pop
@@ -595,6 +272,10 @@ to initialize-tadpole-pop
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
+    set est 0.1 + random-float 0.1 ;variation in establishment
+    set expo 0.5 + random-float 1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
     set color 65
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
@@ -608,8 +289,8 @@ end
 
 ;select a certain number of tadpoles in each patch to have Bd
 to initialize-Bd-tadpoles
-  if Bd-inf-tadpoles-per-infpond > 0 [
-    ask n-of Bd-inf-tadpoles-per-infpond tadpoles-here [
+  if Bd-inf-tadpoles-per-infpondpatch > 0 [
+    ask n-of Bd-inf-tadpoles-per-infpondpatch tadpoles-here [
       set bd 1
       set color white
       set spn 100
@@ -626,6 +307,10 @@ to initialize-tadpole-pop_2
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
+    set est 0.1 + random-float 0.1 ;variation in establishment
+    set expo 0.5 + random-float 1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
     set color 115
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
@@ -646,6 +331,10 @@ to initialize-tadpole-pop_3
     set size 0.2
     set imm random 100
     set s_k (9890 + random 231)
+    set est 0.1 + random-float 0.1 ;variation in establishment
+    set expo 0.5 + random-float 1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
     set color 125
     let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
     let face-dir-x [ pxcor ] of dir-neighbor
@@ -655,6 +344,184 @@ to initialize-tadpole-pop_3
     ;rt random 270  ;patch-at-heading-and-distance -90 1
     fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
     ]
+end
+
+to tadpoles-move
+  let n-mobile-tadpoles round (0.10 * count tadpoles)                           ;10% of tadpoles move to a different perimeter patch each tick
+    ask n-of n-mobile-tadpoles tadpoles [
+      let nextpatch patches with [pp = 1]
+      move-to one-of nextpatch
+      let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]    ;check with ani about why direction matters
+      let face-dir-x [ pxcor ] of dir-neighbor
+      let face-dir-y [ pycor ] of dir-neighbor
+      facexy face-dir-x face-dir-y
+      rt random 40
+      fd (0.32 + random-float 0.13)
+  ]
+end
+
+to update-infections
+  let z1 pz0             ;upon establishment, a zoospore takes ~7 days to mature into a sporangia
+      let z2 pz1
+      let z3 pz2
+      let z4 pz3
+      let z5 pz4
+      let z6 pz5
+      let z7 pz6
+      set pz1 z1
+      set pz2 z2
+      set pz3 z3
+      set pz4 z4
+      set pz5 z5
+      set pz6 z6
+      set pz7 z7
+      set pz0 0
+      set spn spn + pz7
+      set zspn-inc zspn-inc + pz7
+end
+
+to metamorphosis
+        hatch-metamorphs 1 [
+          set aid 1
+          set b_cohort [ b_cohort ] of myself     ;keep track of birth cohort identity
+          set bd [ bd ] of myself       ;maintain bd infection through metamorphosis (McMahon & Rohr, 2015)
+          set expo [expo] of myself
+          set est [est] of myself
+          set infprob [infprob] of myself
+;          set new-pz0 [new-pz0] of myself
+          if bd = 1 [
+;previously all pz0-pz7 was commented out so prezoosporangia were not carried through metamorphosis
+             set pz0 0.5 * ([ pz0 ] of myself)
+             set pz1 0.5 * ([ pz1 ] of myself)
+             set pz2 0.5 * ([ pz2 ] of myself)
+             set pz3 0.5 * ([ pz3 ] of myself)
+             set pz4 0.5 * ([ pz4 ] of myself)
+             set pz5 0.5 * ([ pz5 ] of myself)
+             set pz6 0.5 * ([ pz6 ] of myself)
+             set pz7 0.5 * ([ pz7 ] of myself)
+             set spn 0.5 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 50% for now** maintain spn load proportional to tadpole infection intensity
+          ]
+          set smax (16000 + random 231)
+          set shape "frog top"
+          set size 0.4
+          set color brown
+          ]
+        die                             ;remove tadpole from population once it's metamorphosed
+end
+
+to tadpole-zsp-shedding-and-reinfection
+      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
+      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
+      set pz0 f-selfinfect ;pz0 + 1
+      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
+      ask patch-here [
+      set zsp zsp + same-patch-zsp
+        ]
+      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
+      ask one-of patches in-radius 1 [
+      set zsp zsp + near-shallow-patch-zsp
+        ]
+      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
+      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
+      set zsp zsp + nearest-deep-patch-zsp
+  ]
+end
+
+to max-bd-tadpole-shedding
+      set spn spn - round ((0.148 + random-float 0.006) * spn)       ;sporangia loss rate 0.148 – 0.153 per day
+      let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+
+      let f-selfinfect round (0.05 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
+                                                                    ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
+                                                                    ;but they are prevented from re-entering the zoospore pool
+  ;     set pz0 f-selfinfect ;pz0 + 1                               ;no self-reinfection since they are at their max so all self-reinfections fail
+      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
+      ask patch-here [
+      set zsp zsp + same-patch-zsp
+        ]
+      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
+      ask one-of patches in-radius 1 [
+      set zsp zsp + near-shallow-patch-zsp
+        ]
+      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
+      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
+      set zsp zsp + nearest-deep-patch-zsp
+        ]
+end
+
+to infection-step
+    set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
+    ;print nspn
+    let z-mort 0.284 + random-float 0.5
+    let frogs count tadpoles-here + count metamorphs-here
+    let total-expo sum [expo] of turtles ;contact process (exposure) is dependent on the number of hosts - i.e. more hosts, more likely a zoospore will find one
+    let p-left-in-water exp ( - (z-mort + total-expo) )
+    let surviving-in_water round(zsp * p-left-in-water) ;deterministic how many survive in water
+    let successful-infections round( zsp * (1 - p-left-in-water) * (sum [expo * est] of turtles) / (z-mort + total-expo)) ;assumed number of zoospores that have established
+    set new-infections rnd:weighted-n-of-with-repeats successful-infections turtles [infprob]
+   ; show new-infections ;new infections is a list, not an agentset, because it can contain the same agent multiple times within the list
+   ;show rnd:weighted-n-of-with-repeats successful-infections turtles [infprob]
+   ;show length new-infections
+     ask turtles-here [
+     ; show filter [i -> i = self] new-infections
+      let my-new-infections filter [i -> i = self] new-infections ;subset new-infections list to create a list of only myself
+      if length my-new-infections > 0[
+      set new-pz0 length my-new-infections  ;the length of the subsetted list is how many new zoospores were established in this specific host
+     ; show new-pz0
+      set pz0 pz0 + new-pz0 ;add new infections to previous pz0
+    ]
+  ]
+    set zsp surviving-in_water
+end
+
+to create-data-file
+   if not file-exists? (word "results/no_Bd_baseline_bddynamics.csv") [
+   ; file-open (word "results/baseline_bddynamics" date-and-time ".csv")
+    file-open (word "results/no_Bd_baseline_bddynamics.csv")
+    file-print "day, N_tadpoles, INF_tadpoles, dead_frogs, zspn, zsp, prevzsp, lambda, zspn-inc, N_metamorphs, INF_metamorphs"  ;dead_frogs includes all life stages (tadpoles, metas, frogs) dead with Bd but really only metas are dying of Bd
+    file-close
+    ]
+end
+
+to write-data-file
+  file-open (word "results/no_Bd_baseline_bddynamics.csv")
+  file-type ticks file-type "," file-type count tadpoles file-type "," file-type count tadpoles with [ bd = 1 ] file-type "," file-type bd-mortality file-type "," file-type n-zspn file-type ","file-type sum [ zsp ] of patches file-type "," file-type sum [ prev-zsp ] of patches file-type "," file-type lambda-zsp file-type "," file-type zspn-inc file-type "," file-type count metamorphs file-type "," file-type count metamorphs with [ bd = 1 ] file-type ","
+  file-print ""
+  file-close
+end
+
+to create-pond
+  let nbpatches patches with [ border = 0 ]
+  let counter 0
+    ask one-of nbpatches [
+      set pond 1
+      set counter counter + 1
+      set pcolor blue
+      ;below lines specify the size of the pond (mean and variance)
+      let pondsize round random-normal 135 18
+      repeat pondsize [
+        ask min-one-of patches with [ pond = 0 and border = 0 ] [ distance myself ] [
+          set pond 1
+          set pcolor blue
+          ]
+        ]
+      ]
+end
+
+to calculate-shoreline
+        if count neighbors4 with [ pond = 0 ] = 4 [
+        set shoreline shoreline + 4
+      ]
+      if count neighbors4 with [ pond = 0] = 3 [
+        set shoreline shoreline + 3
+      ]
+      if count neighbors4 with [ pond = 0] = 2 [
+        set shoreline shoreline + 2
+      ]
+      if count neighbors4 with [ pond = 0] = 1 [
+        set shoreline shoreline + 1
+      ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -719,10 +586,10 @@ NIL
 1
 
 MONITOR
-1006
-17
-1063
-62
+764
+10
+821
+55
 day
 ticks + 1
 17
@@ -738,7 +605,7 @@ ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
 100000
-100.0
+500.0
 100
 1
 NIL
@@ -747,10 +614,10 @@ HORIZONTAL
 SLIDER
 15
 339
-211
+276
 372
-Bd-inf-tadpoles-per-infpond
-Bd-inf-tadpoles-per-infpond
+Bd-inf-tadpoles-per-infpondpatch
+Bd-inf-tadpoles-per-infpondpatch
 0
 10
 1.0
@@ -760,10 +627,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-944
-73
-1086
-118
+702
+66
+844
+111
 Tadpole population size
 count tadpoles
 17
@@ -771,10 +638,10 @@ count tadpoles
 11
 
 PLOT
-942
-136
-1176
-295
+700
+118
+934
+277
 Sporangia per infected tadpole
 Sporangia/host
 No. of hosts
@@ -786,13 +653,13 @@ false
 false
 "" ""
 PENS
-"default" 100.0 1 -16777216 true "" "histogram [ spn ] of tadpoles"
+"default" 100.0 1 -16777216 true "" "histogram [ spn ] of tadpoles with [bd = 1]"
 
 MONITOR
-1158
-351
-1229
-396
+947
+276
+1018
+321
 Zoospores
 sum  [ zsp ] of patches with [ pond = 1 ]
 17
@@ -800,10 +667,10 @@ sum  [ zsp ] of patches with [ pond = 1 ]
 11
 
 MONITOR
-1179
-137
-1269
-182
+937
+119
+1027
+164
 Total sporangia
 sum [ spn ] of tadpoles with [ bd = 1 ]
 17
@@ -811,10 +678,10 @@ sum [ spn ] of tadpoles with [ bd = 1 ]
 11
 
 MONITOR
-1076
-73
-1192
-118
+851
+65
+967
+110
 Infected tadpoles
 count tadpoles with [ bd = 1 ]
 17
@@ -822,10 +689,10 @@ count tadpoles with [ bd = 1 ]
 11
 
 PLOT
-936
-313
-1136
-463
+1045
+281
+1245
+431
 Zoospore count
 days
 Zoospores
@@ -870,21 +737,21 @@ NIL
 HORIZONTAL
 
 MONITOR
-1325
-364
-1400
-409
+850
+10
+978
+55
 NIL
-lambda-zsp
+round lambda-zsp
 17
 1
 11
 
 PLOT
-1283
-140
-1483
-290
+1041
+122
+1241
+272
 per capita sporangia
 day
 mean number of sporangia
@@ -926,10 +793,10 @@ SimplePond
 -1000
 
 MONITOR
-1219
-73
-1380
-118
+977
+66
+1138
+111
 Metamorph population size
 count metamorphs
 17
@@ -937,10 +804,10 @@ count metamorphs
 11
 
 MONITOR
-1400
-73
-1532
-118
+1158
+66
+1290
+111
 Infected metamorphs
 count metamorphs with [ bd = 1 ]
 17
@@ -948,10 +815,10 @@ count metamorphs with [ bd = 1 ]
 11
 
 MONITOR
-1183
-189
-1266
-234
+941
+171
+1024
+216
 spn tadpoles
 sum [ spn ] of tadpoles
 17
@@ -959,23 +826,12 @@ sum [ spn ] of tadpoles
 11
 
 MONITOR
-1186
-241
-1268
-286
+944
+223
+1026
+268
 spn meta
-sum [ spn ] of metamorphs
-17
-1
-11
-
-MONITOR
-1184
-454
-1255
-499
-NIL
-shoreline
+round sum [ spn ] of metamorphs
 17
 1
 11
@@ -989,11 +845,65 @@ birth_pulses
 birth_pulses
 1
 3
-3.0
+1.0
 1
 1
 NIL
 HORIZONTAL
+
+PLOT
+701
+284
+936
+449
+Sporangia per infected metamorph
+Sporangia/host
+No. of hosts
+0.0
+4000.0
+0.0
+50.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ spn ] of metamorphs with [bd = 1]"
+
+PLOT
+221
+388
+421
+538
+pz0 per metamorph
+pz0 per meta
+no. metamorphs
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of metamorphs"
+
+PLOT
+435
+388
+635
+538
+pz0 per tadpole
+pz0 per tadpole
+no. tadpoles
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of tadpoles"
 
 @#$#@#$#@
 ## WHAT IS IT?
