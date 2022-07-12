@@ -26,12 +26,12 @@ knitr::opts_chunk$set(echo = TRUE)
 -bd transmission using draws from multinomial distribution
 -no immunity but tadpoles and metamorphs can vary in their exposure and probability of successful zoospore establishment
 -tadpole movement:
-  - how far do tadpoles move? sphere of influence? list function
+  -how far do tadpoles move? sphere of influence? list function
   -implement it in a way that movement can be increased or decreased
   -in principle, make it so that tadpole can move 1 to 5+ patches a day 
 -do we want to initialize with tadpoles on every patch or tadpoles only on a certain number of patches?
     -equal probability for a tadpole to be on any patch but uniform distribution 
-    -intialize density rather than number of tadpoles 
+    -initialize density rather than number of tadpoles 
 -infections maintained through metamorphosis: spn on metamorphs is now 10% of what it was as tadpole (3/7/22)
 -sporangia loads are capped at s_k in tadpoles (sporangia carrying capacity) and smax in metamorphs (mortality threshold)
       -undecided if smax should be proportional to s_k
