@@ -1148,7 +1148,7 @@ MONITOR
 551
 % metas on land
 count metamorphs with [on-land = 1] / count metamorphs
-2
+17
 1
 11
 
