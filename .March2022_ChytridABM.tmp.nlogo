@@ -273,7 +273,8 @@ to go
       let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
       let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
       set pz0 f-selfinfect ;pz0 + 1
-      ask patch-here [
+
+     ask patch-here [
         set zsp zsp + (zsp-release - f-selfinfect)
         ]
       ]
@@ -284,7 +285,8 @@ to go
     ]
   ;make netlogo plot here
  plot-zsp
- ask patches with [zsp > 0] [
+; ask patches with [zsp > 0] [  ;both land and pond patches are infectio
+  ask patches with [zsp > 0] and [pond = 1] [
   infection-step
   ]
   ; ask turtles with [spn > 0] [   ;WRONG PLACE?
@@ -1120,7 +1122,7 @@ meta-mort
 meta-mort
 0
 0.09
-0.06
+0.04
 0.01
 1
 NIL
@@ -1148,7 +1150,7 @@ MONITOR
 551
 % metas on land
 count metamorphs with [on-land = 1] / count metamorphs
-17
+2
 1
 11
 
