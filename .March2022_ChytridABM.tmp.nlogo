@@ -170,6 +170,7 @@ end
 to go
 ;  random-seed behaviorspace-run-number
   if ticks = 90 [ stop ]
+  ;if ticks = 104 [ stop ]    ; for scenario in which all tadpoles have the same amount of time to metamorphose regardless of birth cohort
   ask tadpoles [
     set aid aid + 1                  ;adding a day to the tadpole's age
    ; if random-float 1 < 0.06 [       ;tadpole daily mortality probability estimated from Govindarajulu 2006
@@ -180,18 +181,20 @@ to go
   if birth_pulses = 2 [
   if ticks = 7 [
     ask patches with [ pp = 1 ] [
-     initialize-tadpole-pop_2
+    initialize-tadpole-pop_2
     ]
   ]
   ]
   if birth_pulses = 3 [
   if ticks = 7 [
    ask patches with [ pp = 1 ] [
+ ;  initialize-tadpole-pop
    initialize-tadpole-pop_2
     ]
   ]
   if ticks = 14 [
     ask patches with [ pp = 1 ] [
+   ; initialize-tadpole-pop
      initialize-tadpole-pop_3
     ]
   ]
@@ -211,13 +214,19 @@ to go
     ]
     ]
   ]
-  if ticks = 75 [
-    if any? tadpoles [
-    ask tadpoles[
+;  if ticks = 75 [                  ;tadpoles in a later birth pulse have less time as tadpoles before metamorphosis
+;    if any? tadpoles [
+;    ask tadpoles[
+;    metamorphosis
+;      ]
+;    ]
+;  ]
+    if any? tadpoles with [ aid > 74 ] [   ;regardless of birth cohort, all tadpoles have the same amount of time to metamorphose
+    ask tadpoles[                          ;metamorphosis ranges from 56-75 days in tadpole age
     metamorphosis
       ]
     ]
-  ]
+
  ;tadpole movement submodel
   if SimplePond = FALSE [
     tadpoles-move
@@ -314,6 +323,7 @@ to go
     set spn 0
   ]
   let total-bd-metas count metamorphs with [spn > 0]
+  ;if ticks = 103 and total-bd-metas >= 2 [
   if ticks = 89 and total-bd-metas >= 2 [
  ; summary-stats-meta-abundance
   summary-stats-meta-intensity
@@ -366,7 +376,9 @@ end
 
 ;populate patches with tadpoles
 to initialize-tadpole-pop
-  sprout-tadpoles round (ini-tadpoles-per-pondpatch) / birthpulses [
+
+  if birth_pulses = 1 [
+  sprout-tadpoles ini-tadpoles-per-pondpatch [
     set b_cohort 1        ;specify birth cohort
     set shape "frog top"
     set size 0.2
@@ -386,79 +398,57 @@ to initialize-tadpole-pop
     ;rt random 270  ;patch-at-heading-and-distance -90 1
     fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
     ]
+  ]
 
-;  if birth_pulses = 1 [
-;  sprout-tadpoles ini-tadpoles-per-pondpatch [
-;    set b_cohort 1        ;specify birth cohort
-;    set shape "frog top"
-;    set size 0.2
-;    set spn 0
-;    set imm random 100
-;    set s_k (9890 + random 231)
-;    set est 0.1 + random-float 0.1 ;variation in establishment
-;    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
-;                                  ;functions as a removal rate of parasites from the environemnt due to contact process
-;    set infprob est * expo
-;    set color 65
-;    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
-;    let face-dir-x [ pxcor ] of dir-neighbor
-;    let face-dir-y [ pycor ] of dir-neighbor
-;    facexy face-dir-x face-dir-y
-;    rt random 40
-;    ;rt random 270  ;patch-at-heading-and-distance -90 1
-;    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
-;    ]
-;  ]
-;
-;    if birth_pulses = 2 [
-;    let new-tadpoles round (ini-tadpoles-per-pondpatch) / 2
-;  sprout-tadpoles new-tadpoles [
-; ; sprout-tadpoles ini-tadpoles-per-pondpatch [
-;    set b_cohort 1        ;specify birth cohort
-;    set shape "frog top"
-;    set size 0.2
-;    set spn 0
-;    set imm random 100
-;    set s_k (9890 + random 231)
-;    set est 0.1 + random-float 0.1 ;variation in establishment
-;    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
-;                                  ;functions as a removal rate of parasites from the environemnt due to contact process
-;    set infprob est * expo
-;    set color 65
-;    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
-;    let face-dir-x [ pxcor ] of dir-neighbor
-;    let face-dir-y [ pycor ] of dir-neighbor
-;    facexy face-dir-x face-dir-y
-;    rt random 40
-;    ;rt random 270  ;patch-at-heading-and-distance -90 1
-;    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
-;    ]
-;  ]
-;
-;   if birth_pulses = 3 [
-;   let new-tadpoles round (ini-tadpoles-per-pondpatch) / 3
-;  sprout-tadpoles new-tadpoles [
-; ; sprout-tadpoles ini-tadpoles-per-pondpatch [
-;    set b_cohort 1        ;specify birth cohort
-;    set shape "frog top"
-;    set size 0.2
-;    set spn 0
-;    set imm random 100
-;    set s_k (9890 + random 231)
-;    set est 0.1 + random-float 0.1 ;variation in establishment
-;    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
-;                                  ;functions as a removal rate of parasites from the environemnt due to contact process
-;    set infprob est * expo
-;    set color 65
-;    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
-;    let face-dir-x [ pxcor ] of dir-neighbor
-;    let face-dir-y [ pycor ] of dir-neighbor
-;    facexy face-dir-x face-dir-y
-;    rt random 40
-;    ;rt random 270  ;patch-at-heading-and-distance -90 1
-;    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
-;    ]
-;  ]
+    if birth_pulses = 2 [
+    let new-tadpoles round ((ini-tadpoles-per-pondpatch) / 2)
+    sprout-tadpoles new-tadpoles [
+ ; sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 1        ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k (9890 + random 231)
+    set est 0.1 + random-float 0.1 ;variation in establishment
+    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 65
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+  ]
+
+   if birth_pulses = 3 [
+   let new-tadpoles round ((ini-tadpoles-per-pondpatch) / 3)
+  sprout-tadpoles new-tadpoles [
+ ; sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 1        ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k (9890 + random 231)
+    set est 0.1 + random-float 0.1 ;variation in establishment
+    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 65
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+  ]
 end
 
 ;select a certain number of tadpoles in each patch to have Bd
@@ -477,8 +467,8 @@ end
 ;there's probably an easier way to do this than creating multiple submodels but will do this for now
 to initialize-tadpole-pop_2
   if birth_pulses = 2 [   ;divide initial tadpoles per patch by three because there are 3 birth pulses, this way total initial tadpoles is the same
-   let new-tadpoles round (ini-tadpoles-per-pondpatch) / 2
-  sprout-tadpoles new-tadpoles [
+    let new-tadpoles round (ini-tadpoles-per-pondpatch) / 2
+   sprout-tadpoles new-tadpoles [
   ;sprout-tadpoles ini-tadpoles-per-pondpatch [
     set b_cohort 2                  ;specify birth cohort
     set shape "frog top"
@@ -502,7 +492,7 @@ to initialize-tadpole-pop_2
   ]
 
     if birth_pulses = 3 [
-    let new-tadpoles round (ini-tadpoles-per-pondpatch) / 3    ;divide initial tadpoles per patch by three because there are 3 birth pulses, this way total initial tadpoles is the same
+    let new-tadpoles round ((ini-tadpoles-per-pondpatch) / 3)    ;divide initial tadpoles per patch by three because there are 3 birth pulses, this way total initial tadpoles is the same
     sprout-tadpoles new-tadpoles [
     ;sprout-tadpoles ini-tadpoles-per-pondpatch [
     set b_cohort 2                  ;specify birth cohort
@@ -530,7 +520,7 @@ end
 ;populate patches with tadpoles with birth cohort 3
 ;there's probably an easier way to do this than creating multiple submodels but will do this for now
 to initialize-tadpole-pop_3
-  let new-tadpoles3 round (ini-tadpoles-per-pondpatch) / 3
+  let new-tadpoles3 round ((ini-tadpoles-per-pondpatch) / 3)
   sprout-tadpoles new-tadpoles3 [
  ; sprout-tadpoles ini-tadpoles-per-pondpatch [
     set b_cohort 3                  ;specify birth cohort
@@ -844,7 +834,7 @@ ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
 1000
-200.0
+300.0
 10
 1
 NIL
@@ -1241,6 +1231,17 @@ MONITOR
 % bd deaths
 bd-mortality / num-metamorphosis
 2
+1
+11
+
+MONITOR
+1080
+12
+1274
+57
+Number of perimeter patches
+count patches with [pp = 1]
+17
 1
 11
 
@@ -1943,7 +1944,7 @@ NetLogo 6.2.2
       <value value="200"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="meta_pop_size_with_and_without_bd" repetitions="25" sequentialRunOrder="false" runMetricsEveryStep="false">
+  <experiment name="meta_pop_size_with_and_without_bd" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -1954,7 +1955,12 @@ NetLogo 6.2.2
     <enumeratedValueSet variable="t-movement">
       <value value="0.25"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="meta-mort" first="0" step="0.02" last="0.09"/>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.04"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="m-land">
       <value value="0.1"/>
     </enumeratedValueSet>
@@ -1976,6 +1982,48 @@ NetLogo 6.2.2
     </enumeratedValueSet>
     <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
       <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="birth_pulses2" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>var_spn_inten_metas</metric>
+    <metric>aggregation_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>bd-mortality / num-metamorphosis</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.04"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="birth_pulses" first="1" step="1" last="3"/>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="300"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
