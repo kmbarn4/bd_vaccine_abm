@@ -30,6 +30,7 @@ globals
   var_spn_inten_metas
   aggregation_inten_metas
   metas_prev
+  baseline_smax
 ]
 
 breed [ tadpoles tadpole ]
@@ -284,8 +285,8 @@ to go
         set color green
         ]
       let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
-      set pz0 f-selfinfect ;pz0 + 1
+      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately encounter the host - SELF EXPOSURE
+      set pz0 f-selfinfect * est ;pz0 + 1                        ;SELF-INFECTION
 
      ask patch-here [
         set zsp zsp + (zsp-release - f-selfinfect)
@@ -629,7 +630,8 @@ to metamorphosis
              set pz7 0.5 * ([ pz7 ] of myself)
              set spn 0.5 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 50% for now** maintain spn load proportional to tadpole infection intensity
           ]
-          set smax (16000 + random 231)
+          ;set smax (16000 + random 231)
+           set smax (baseline_smax + random 231)
           set shape "frog top"
           set size 0.4
           set color brown
@@ -834,7 +836,7 @@ ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
 1000
-200.0
+300.0
 10
 1
 NIL
@@ -1191,7 +1193,7 @@ meta-mort
 meta-mort
 0
 0.09
-0.04
+0.02
 0.01
 1
 NIL
@@ -2024,6 +2026,55 @@ NetLogo 6.2.2
     <steppedValueSet variable="birth_pulses" first="1" step="1" last="3"/>
     <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
       <value value="300"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="baseline_smax" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>bd-mortality / num-metamorphosis</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="100"/>
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="1000000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+      <value value="0.04"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
