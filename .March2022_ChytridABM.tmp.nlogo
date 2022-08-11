@@ -16,23 +16,15 @@ globals
   avg_spn_abun_tadpoles                          ;mean parasite abundance of tadpoles
   aggregation_abun_tadpoles                      ;parasite abundance aggregation
   prop_not_s_k_abun                              ;proportion of tadpoles with spn less than s_k
-  ;aggregation_metas
- ; avg_abun_spn_meta
- ; var_abun_spn_metas
   avg_spn_inten_tadpoles                       ;mean infection intensity of tadpoles
   var_spn_inten_tadpoles                       ;variance of tadpole infection intensities
   aggregation_inten_tadpoles                   ;infection intensity aggregation
   prop_not_s_k_inten                           ;proportion of tadpoles with infection intensities greater than zero and less than carrying capacity
   tad_prev                                     ;prevalence of bd in tadpoles
-;  avg_spn_abun_metas
-;  var_spn_abun_metas
-;  aggregation_abun_metas
   avg_spn_inten_metas
   var_spn_inten_metas
   aggregation_inten_metas
   metas_prev
- ; baseline_smax                               ;PUT ON INTERFACE
-  ;baseline_est                                ;PUT ON INTERFACE
   prop_deaths_due_to_bd                       ;proportion of metamorph deaths attributable to Bd = bd-mortality / (bd-mortality + baseline-mortality)
 ]
 
@@ -334,7 +326,7 @@ to go
   if ticks = last-day - 1 [
   set prop_deaths_due_to_bd bd-mortality / (bd-mortality + baseline-mortality)
   if total-bd-metas >= 2 [
- ; summary-stats-meta-abundance
+
   summary-stats-meta-intensity
   ]
   ]

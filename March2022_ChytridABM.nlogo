@@ -16,23 +16,15 @@ globals
   avg_spn_abun_tadpoles                          ;mean parasite abundance of tadpoles
   aggregation_abun_tadpoles                      ;parasite abundance aggregation
   prop_not_s_k_abun                              ;proportion of tadpoles with spn less than s_k
-  ;aggregation_metas
- ; avg_abun_spn_meta
- ; var_abun_spn_metas
   avg_spn_inten_tadpoles                       ;mean infection intensity of tadpoles
   var_spn_inten_tadpoles                       ;variance of tadpole infection intensities
   aggregation_inten_tadpoles                   ;infection intensity aggregation
   prop_not_s_k_inten                           ;proportion of tadpoles with infection intensities greater than zero and less than carrying capacity
   tad_prev                                     ;prevalence of bd in tadpoles
-;  avg_spn_abun_metas
-;  var_spn_abun_metas
-;  aggregation_abun_metas
   avg_spn_inten_metas
   var_spn_inten_metas
   aggregation_inten_metas
   metas_prev
- ; baseline_smax                               ;PUT ON INTERFACE
-  ;baseline_est                                ;PUT ON INTERFACE
   prop_deaths_due_to_bd                       ;proportion of metamorph deaths attributable to Bd = bd-mortality / (bd-mortality + baseline-mortality)
 ]
 
@@ -323,7 +315,6 @@ to go
   set zspn-inc 0
   ;write-data-file
 ;  if ticks = 53 [
-;  summary-stats-tad-abundance
 ;  summary-stats-tad-intensity
 ;  ]
   ask metamorphs with [bd = 0] [
@@ -334,7 +325,6 @@ to go
   if ticks = last-day - 1 [
   set prop_deaths_due_to_bd bd-mortality / (bd-mortality + baseline-mortality)
   if total-bd-metas >= 2 [
- ; summary-stats-meta-abundance
   summary-stats-meta-intensity
   ]
   ]
@@ -342,18 +332,6 @@ to go
 end
 
 ;procedures below
-to summary-stats-tad-abundance
-    set avg_spn_abun_tadpoles mean [ spn ] of tadpoles
-  ;  if count tadpoles with [bd = 1] > 1 [
-    set var_spn_abun_tadpoles variance [ spn ] of tadpoles
-    set aggregation_abun_tadpoles (variance [spn] of tadpoles) / mean [spn] of tadpoles
- ; ]
-;  if count tadpoles with [bd = 1] <= 1 [
-;    set var_spn_abun_tadpoles 0
-;    set aggregation_abun_tadpoles 0 ; this could be incorrect
-;  ]
- set prop_not_s_k_abun (count tadpoles with [spn < s_k]) / count tadpoles
-end
 
 to summary-stats-tad-intensity
   set avg_spn_inten_tadpoles mean [ spn ] of tadpoles with [spn > 0]
@@ -361,13 +339,6 @@ to summary-stats-tad-intensity
   set aggregation_inten_tadpoles (variance [spn] of tadpoles with [spn > 0]) / mean [spn] of tadpoles with [spn > 0]
   set prop_not_s_k_inten (count tadpoles with [spn < s_k and spn > 0]) / count tadpoles with [spn > 0]
   set tad_prev (count tadpoles with [ bd = 1 ]) / count tadpoles
-end
-
-to summary-stats-meta-abundance
-;    set avg_spn_abun_metas mean [ spn ] of metamorphs
-;    set var_spn_abun_metas variance [ spn ] of metamorphs
-;    set aggregation_abun_metas (variance [spn] of metamorphs) / mean [spn] of metamorphs
-   ;set prop_not_smax_abun (count metamorphs with [spn < smax]) / count metamorphs
 end
 
 to summary-stats-meta-intensity
