@@ -278,14 +278,12 @@ to go
         ;]
       set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
       if spn = 0 [            ;uninfected metamorphs appear green
-       ;;;QUESTION - should this ^^ come AFTER sporangia loss rate right???
         set bd 0
         set color green
         ]
       let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
       let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately encounter the host - SELF EXPOSURE
       set pz0 f-selfinfect * est ;pz0 + 1                        ;SELF-INFECTION
-
      ask patch-here [
         set zsp zsp + (zsp-release - f-selfinfect)
         ]
@@ -641,14 +639,10 @@ to tadpole-zsp-shedding-and-reinfection
       ask patch-here [
       set zsp zsp + same-patch-zsp
         ]
-      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
+      let near-shallow-patch-zsp round (zsp-release - f-selfinfect - same-patch-zsp) ;10% of zoospores in pool deposited onto neighbor patch
       ask one-of patches in-radius 1 [
       set zsp zsp + near-shallow-patch-zsp
         ]
-      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
-      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
-      set zsp zsp + nearest-deep-patch-zsp
-  ]
 end
 
 to max-bd-tadpole-shedding
@@ -663,13 +657,9 @@ to max-bd-tadpole-shedding
       ask patch-here [
       set zsp zsp + same-patch-zsp
         ]
-      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
+      let near-shallow-patch-zsp round (zsp-release - f-selfinfect - same-patch-zsp) ;10% of zoospores in pool deposited onto neighbor patch
       ask one-of patches in-radius 1 [
       set zsp zsp + near-shallow-patch-zsp
-        ]
-      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
-      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
-      set zsp zsp + nearest-deep-patch-zsp
         ]
 end
 
@@ -1322,7 +1312,7 @@ baseline_est
 baseline_est
 0
 1
-0.45
+0.25
 0.01
 1
 NIL
@@ -2499,7 +2489,7 @@ NetLogo 6.2.2
       <value value="1"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="562smax_meta_pop_size_with_and_without_bd" repetitions="25" runMetricsEveryStep="false">
+  <experiment name="562smax_meta_pop_size_with_and_without_bd2" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -2550,8 +2540,9 @@ NetLogo 6.2.2
     </enumeratedValueSet>
     <enumeratedValueSet variable="baseline_est">
       <value value="0.1"/>
+      <value value="0.15"/>
+      <value value="0.2"/>
       <value value="0.25"/>
-      <value value="0.45"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
