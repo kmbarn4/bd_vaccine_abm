@@ -276,7 +276,9 @@ to go
       ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
         ;set color red
         ;]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
+      ;set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day as of 8.19.22
+      set spn spn - round ((0.19 + random-float 0.01) * spn)    ;value from Briggs 2010 paper
+      ;set spn spn - round (0.2 * spn) - NO VARIATION
       if spn = 0 [            ;uninfected metamorphs appear green
         set bd 0
         set color green
@@ -363,9 +365,10 @@ to initialize-tadpole-pop
     set size 0.2
     set spn 0
     set imm random 100
-    set s_k (9890 + random 231)
+   ; set s_k (9890 + random 231)
+    set s_k (9395 + random 989) ; + or - 5% of 9890
     set est baseline_est + random-float 0.1 ;variation in establishment
-    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.019 + random-float 0.001 ;0.019-0.021, exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 65
@@ -388,9 +391,9 @@ to initialize-tadpole-pop
     set size 0.2
     set spn 0
     set imm random 100
-    set s_k (9890 + random 231)
+    set s_k (9395 + random 989) ; + or - 5% of 9890
     set est baseline_est + random-float 0.1 ;variation in establishment
-    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.019 + random-float 0.001 ;0.019-0.021 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 65
@@ -413,9 +416,9 @@ to initialize-tadpole-pop
     set size 0.2
     set spn 0
     set imm random 100
-    set s_k (9890 + random 231)
+    set s_k (9395 + random 989)
     set est baseline_est + random-float 0.1 ;variation in establishment
-    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.019 + random-float 0.001; exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 65
@@ -454,10 +457,10 @@ to initialize-tadpole-pop_2
     set size 0.2
     set spn 0
     set imm random 100
-    set s_k (9890 + random 231)
+    set s_k (9395 + random 989)
    ; set est 0.1 + random-float 0.1 ;variation in establishment
     set est baseline_est + random-float 0.1
-    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.019 + random-float 0.001 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 115
@@ -480,9 +483,9 @@ to initialize-tadpole-pop_2
     set size 0.2
     set spn 0
     set imm random 100
-    set s_k (9890 + random 231)
+    set s_k (9395 + random 989)
     set est baseline_est + random-float 0.1 ;variation in establishment
-    set expo 0.02 + random-float 0.1 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.019 + random-float 0.001 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 115
@@ -508,9 +511,9 @@ to initialize-tadpole-pop_3
     set size 0.2
     set spn 0
     set imm random 100
-    set s_k (9890 + random 231)
+    set s_k (9395 + random 989)
     set est baseline_est + random-float 0.1 ;variation in establishment
-    set expo 0.02 + random-float 0.1  ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+    set expo 0.019 + random-float 0.001 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
     set infprob est * expo
     set color 125
@@ -631,7 +634,8 @@ to metamorphosis
 end
 
 to tadpole-zsp-shedding-and-reinfection
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day - Briggs 2010 uses 0.2 lost per day
+     ; set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day - Briggs 2010 uses 0.2 lost per day
+      set spn spn - round ((0.19 + random-float 0.01) * spn)     ;Briggs 2010 uses 0.2 lost per day
       let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
       let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
       set pz0 f-selfinfect ;pz0 + 1
@@ -646,7 +650,7 @@ to tadpole-zsp-shedding-and-reinfection
 end
 
 to max-bd-tadpole-shedding
-      set spn spn - round ((0.148 + random-float 0.006) * spn)       ;sporangia loss rate 0.148 – 0.153 per day
+      set spn spn - round ((0.19 + random-float 0.01) * spn)         ;Briggs 2010 uses 0.2 lost per day
       let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
 
       let f-selfinfect round (0.05 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
@@ -666,7 +670,8 @@ end
 to infection-step
     set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
     ;print nspn
-    let z-mort 0.284 + random-float 0.5
+    ;let z-mort 0.284 + random-float 0.5
+    let z-mort 0.2698 + random-float 0.0284
     let frogs count tadpoles-here + count metamorphs-here
     let total-expo sum [expo] of turtles ;contact process (exposure) is dependent on the number of hosts - i.e. more hosts, more likely a zoospore will find one
     let p-left-in-water exp ( - (z-mort + total-expo) )
