@@ -1,13 +1,31 @@
 ;Chytridiomycosis ABM
 
+extensions [rnd]
+
 globals
 [
   zspn-inc                                       ;incidence of zoosporangia per day
   bd-mortality                                   ;number of frogs dying of Bd
+  baseline-mortality                             ;number of metamorphs dying due to background mortality
   lambda-zsp                                     ;growth rate of zoospores
   n-zspn                                         ;sum of zoosporangium
   shoreline                                      ;shoreline perimeter
   k                                              ;max number of frogs
+  num-metamorphosis                              ;number of tadpoles that undergo metamorphosis (number of metamorphs prior to baseline mortality or bd death)
+  var_spn_abun_tadpoles                          ;variance of tadpole parasite abundances
+  avg_spn_abun_tadpoles                          ;mean parasite abundance of tadpoles
+  aggregation_abun_tadpoles                      ;parasite abundance aggregation
+  prop_not_s_k_abun                              ;proportion of tadpoles with spn less than s_k
+  avg_spn_inten_tadpoles                       ;mean infection intensity of tadpoles
+  var_spn_inten_tadpoles                       ;variance of tadpole infection intensities
+  aggregation_inten_tadpoles                   ;infection intensity aggregation
+  prop_not_s_k_inten                           ;proportion of tadpoles with infection intensities greater than zero and less than carrying capacity
+  tad_prev                                     ;prevalence of bd in tadpoles
+  avg_spn_inten_metas
+  var_spn_inten_metas
+  aggregation_inten_metas
+  metas_prev
+  prop_deaths_due_to_bd                       ;proportion of metamorph deaths attributable to Bd = bd-mortality / (bd-mortality + baseline-mortality)
 ]
 
 breed [ tadpoles tadpole ]
@@ -22,7 +40,8 @@ patches-own
   prev-zsp                                        ;number of zoospores in the previous time step (to calculate lambda)
   pondid                                          ;pond number
   pp                                              ;pond perimeter
-
+  new-infections                                  ;output of multinomial draws, represents a list where for each time a host appears in the list it has a new zoospore successfully infecting it
+  perimeter-land                                  ;perimeter land patch
 ]
 
 metamorphs-own
@@ -32,6 +51,10 @@ metamorphs-own
   spn                                            ;sporangia load
   imm                                            ;immunity
   smax                                           ;maximum sporangia load - mortality occurs when sporangia load exceeds smax
+  est
+  expo
+  infprob
+  new-pz0                                        ;temporary new pz0 for each patch
   pz0                                            ;prezoosporangium (pz0-pz7 are used to create a 7 day lag period from zoospore establishment till the maturation of an infectious sporangia)
   pz1
   pz2
@@ -42,6 +65,7 @@ metamorphs-own
   pz7
   vac
   b_cohort                                       ;specifies birth cohort
+  on-land                                        ;move to a land patch
 ]
 
 tadpoles-own
@@ -51,6 +75,10 @@ tadpoles-own
   spn                                           ;sporangia load
   imm                                           ;immunity
   s_k                                           ;maximum number of zoospores on tadpoles due to space limitation (sporangia carrying capacity)
+  est
+  expo
+  infprob
+  new-pz0
   pz0                                           ;prezoosporangium (pz0-pz7 are used to create a 7 day lag period from zoospore establishment till the maturation of an infectious sporangia)
   pz1
   pz2
@@ -62,19 +90,14 @@ tadpoles-own
   vac
   b_cohort                                      ;specifies birth cohort if modeling birth pulses
 ]
-;prezsp-own
-;[
-  ;host                                            ;who of host infected
-  ;counter                                         ;7 days until sporangia develops
-;]
-;
+
 to setup
   ca
   ifelse SimplePond = TRUE
   [ resize-world 0 3 0 3
     set-patch-size 80 ]
   [ set-patch-size 17     ;5
-    resize-world 0 20 0 20 ]   ;0 99 0 99
+    resize-world 0 20 0 20 ]
 
   ask patches [
     set pcolor brown
@@ -90,11 +113,8 @@ to setup
     [ set border 1 ]
     [ set border 0 ]
   ]
-
-
   ;define non-border patches (nbpatches) because we don't want pond patches on the border
   let nbpatches patches with [ border = 0 ]
-
   ifelse SimplePond = TRUE
   [ ask one-of nbpatches [
     set pond 1
@@ -104,7 +124,584 @@ to setup
     initialize-Bd-tadpoles
     ]
     ]
-  [ let counter 0
+  [
+  create-pond
+  ]
+    ;below code specifies which patches are on the perimeter.
+  ask patches with [ pond = 1 ] [
+     if count neighbors4 with [ pond = 0 ] > 0 [
+        set pp 1
+        set pcolor 107
+      ]
+  ]
+   ask patches with [ pond = 0 ] [
+     if count neighbors4 with [ pond = 1 ] > 0 [
+        set perimeter-land 1
+    ]
+  ]
+    ask patches with [pp = 1][
+    ;reports the shoreline in the command center (if I want that)
+  ;  calculate-shoreline
+    ]
+   ; print shoreline  ;in case I want to know what the shoreline/perimeter is
+    let perimeterp patches with [ pp = 1 ]
+    ask perimeterp [
+     initialize-tadpole-pop
+    if inf-ponds = 1 [
+      initialize-Bd-tadpoles
+    ]
+  ]
+
+  ; if only wanting 1 pond patch to be infected, comment out lines 145-147 and use lines 151-155
+;  if inf-ponds = 1 [
+;      ask n-of 1 perimeterp [  ;if only wanting to initialize 1 patch with Bd tadpole
+;      initialize-Bd-tadpoles
+;    ]
+;  ]
+
+ ;create-data-file
+  reset-ticks
+end
+
+to go
+;  random-seed behaviorspace-run-number
+  ;if ticks = 90 [ stop ]
+  if ticks = last-day [ stop ]
+  ;if ticks = 104 [ stop ]    ; for scenario in which all tadpoles have the same amount of time to metamorphose regardless of birth cohort
+  ask tadpoles [
+    set aid aid + 1                  ;adding a day to the tadpole's age
+   ; if random-float 1 < 0.06 [       ;tadpole daily mortality probability estimated from Govindarajulu 2006
+   if random-float 1 < tad-mort [
+    die
+    ]
+  ]
+  if birth_pulses = 2 [
+  if ticks = 7 [
+    ask patches with [ pp = 1 ] [
+    initialize-tadpole-pop_2
+    ]
+  ]
+  ]
+  if birth_pulses = 3 [
+  if ticks = 7 [
+   ask patches with [ pp = 1 ] [
+   initialize-tadpole-pop_2
+    ]
+  ]
+  if ticks = 14 [
+    ask patches with [ pp = 1 ] [
+     initialize-tadpole-pop_3
+    ]
+  ]
+  ]
+  ask metamorphs [
+    set aid aid + 1                   ;adding a day to the metamorph's age
+    if random-float 1 < meta-mort [    ;meta_mort is a scale of mortality probabilities
+      set baseline-mortality baseline-mortality + 1  ;keep track of baseline mortality
+      die
+    ]
+  ]
+
+  if any? tadpoles with [ aid > 55 ] [  ;initiate metamorphosis in (some) tadpoles greater than 55
+  ask tadpoles with [ aid > 55 ] [
+  if random-float 1 < 0.11 [
+  metamorphosis
+    ]
+    ]
+  ]
+;  if ticks = 75 [                  ;tadpoles in a later birth pulse have less time as tadpoles before metamorphosis
+;    if any? tadpoles [
+;    ask tadpoles[
+;    metamorphosis
+;      ]
+;    ]
+;  ]
+    if any? tadpoles with [ aid > 74 ] [   ;regardless of birth cohort, all tadpoles have the same amount of time to metamorphose
+    ask tadpoles[                          ;metamorphosis ranges from 56-75 days in tadpole age
+    metamorphosis
+      ]
+    ]
+
+ ;tadpole movement submodel
+  if SimplePond = FALSE [
+    tadpoles-move
+   ; metamorphs-move
+   ; metamorphs-move-simple
+    metamorphs-move-complex
+    ;ask metamorphs [                                                             ;all metamorphs move to another perimeter patch
+   ; move-to one-of patches with [ pond = 1  and pp = 1]
+   ; ]
+  ]
+  let pondppatches patches with [ pond = 1 and pp = 1]
+  ask pondppatches [
+    set prev-zsp zsp                                                            ;store the last tick's zoospores as previous zoospores
+  ;  set pcolor scale-color red zsp 1000000 0
+    ]
+    let bd-tadpoles tadpoles with [ bd = 1  and spn < s_k ]
+
+;REMINDER: double check that bd-max-tadpoles is implemented correctly - do pz0 infections continue to progress?
+
+    ask bd-tadpoles
+    [
+      update-infections
+      if spn >= 8000 [
+        set color red
+        ]
+      tadpole-zsp-shedding-and-reinfection
+      if spn = 0 [
+      set bd 0
+      set color green
+        ]
+        ]
+    let maxbd-tadpoles tadpoles with [ bd = 1  and spn >= s_k ]      ;maxbd-tadpoles are tadpoles that have met or exceeded sporangia carrying capacity
+    ask maxbd-tadpoles [                                             ;maxbd-tadpoles cannot get reinfected but can still contribute to the zoospore pool and clear sporangia
+      if spn >= 8000 [                                               ;set these tadpoles as red if their sporangia load is above 8000
+        set color red
+        set est 0  ;this prevents maxbd-tadpoles from getting reinfected, but they can still be exposed to Bd
+        ]
+        max-bd-tadpole-shedding
+    ]
+    let bd-metamorphs metamorphs with [ bd = 1 ]
+    ask bd-metamorphs
+    [
+     update-infections
+     if spn >= smax [
+        set bd-mortality bd-mortality + 1
+       ;set color red
+        die
+        ]
+      ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
+        ;set color red
+        ;]
+      set spn spn - round (0.2 * spn)
+      if spn = 0 [            ;uninfected metamorphs appear green
+        set bd 0
+        set color green
+        ]
+      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately encounter the host - SELF EXPOSURE
+      set pz0 f-selfinfect * est ;pz0 + 1                        ;SELF-INFECTION
+     ask patch-here [
+        set zsp zsp + (zsp-release - f-selfinfect)
+        ]
+      ]
+ ; ask pondppatches with [zsp > 0] [
+    ;asking infected pond perimeter patches
+   ask patches with [pond = 1] [
+    set pcolor scale-color red zsp 1000000 0
+    ]
+  ;make netlogo plot here
+ plot-zsp
+; ask patches with [zsp > 0] [  ;both land and pond patches are infectious
+  ask patches with [zsp > 0 and pond = 1] [  ;only pond patches are infectious
+  infection-step
+  ]
+  ; ask turtles with [spn > 0] [   ;WRONG PLACE?
+  ask turtles with [pz0 > 0] [
+    set bd 1
+    set color white
+  ]
+  if ticks > 1 [
+    if sum [ prev-zsp ] of patches > 0 [
+      set lambda-zsp precision (sum [ zsp ] of patches / sum [ prev-zsp ] of patches) 2
+      ]
+    ]
+  set n-zspn sum [ spn ] of tadpoles
+  set zspn-inc 0
+  ;write-data-file
+;  if ticks = 53 [
+;  summary-stats-tad-intensity
+;  ]
+  ask metamorphs with [bd = 0] [
+    set spn 0
+  ]
+  let total-bd-metas count metamorphs with [spn > 0]
+  ;if ticks = 103 and total-bd-metas >= 2 [
+  if ticks = last-day - 1 [
+  set prop_deaths_due_to_bd bd-mortality / (bd-mortality + baseline-mortality)
+  if total-bd-metas >= 2 [
+  summary-stats-meta-intensity
+  ]
+  ]
+  tick
+end
+
+;procedures below
+
+to summary-stats-tad-intensity
+  set avg_spn_inten_tadpoles mean [ spn ] of tadpoles with [spn > 0]
+  set var_spn_inten_tadpoles variance [ spn ] of tadpoles with [spn > 0]
+  set aggregation_inten_tadpoles (variance [spn] of tadpoles with [spn > 0]) / mean [spn] of tadpoles with [spn > 0]
+  set prop_not_s_k_inten (count tadpoles with [spn < s_k and spn > 0]) / count tadpoles with [spn > 0]
+  set tad_prev (count tadpoles with [ bd = 1 ]) / count tadpoles
+end
+
+to summary-stats-meta-intensity
+  set avg_spn_inten_metas mean [ spn ] of metamorphs with [spn > 0]
+  set var_spn_inten_metas variance [ spn ] of metamorphs with [spn > 0]
+  set aggregation_inten_metas (variance [spn] of metamorphs with [spn > 0]) / mean [spn] of metamorphs with [spn > 0]
+;  set prop_not_smax_inten (count metamorphs with [spn < smax and spn > 0]) / count metamorphs with [spn > 0]
+  set metas_prev (count metamorphs with [ bd = 1 ]) / count metamorphs
+end
+
+to plot-zsp
+  set-current-plot "Zsp Count"
+  set-current-plot-pen "zsp"
+  plot sum [ zsp ] of patches
+end
+
+;populate patches with tadpoles
+to initialize-tadpole-pop
+
+  if birth_pulses = 1 [
+  sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 1        ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k  9890
+    set est baseline_est ;variation in establishment
+    set expo 0.02 ; exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 65
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+  ]
+
+    if birth_pulses = 2 [
+    let new-tadpoles round ((ini-tadpoles-per-pondpatch) / 2)
+    sprout-tadpoles new-tadpoles [
+ ; sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 1        ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k  9890
+    set est baseline_est ;variation in establishment
+    set expo 0.020 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 65
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+  ]
+
+   if birth_pulses = 3 [
+   let new-tadpoles round ((ini-tadpoles-per-pondpatch) / 3)
+  sprout-tadpoles new-tadpoles [
+ ; sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 1        ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k  9890
+    set est baseline_est ;variation in establishment
+    set expo 0.02 ; exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 65
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+  ]
+end
+
+;select a certain number of tadpoles in each patch to have Bd
+to initialize-Bd-tadpoles
+  if Bd-inf-tadpoles-per-infpondpatch > 0 [
+    ask n-of Bd-inf-tadpoles-per-infpondpatch tadpoles-here [
+      set bd 1
+      set color white
+      set spn 100
+      ;set pcolor yellow
+      ]
+    ]
+end
+
+;populate patches with tadpoles with birth cohort 2
+;there's probably an easier way to do this than creating multiple submodels but will do this for now
+to initialize-tadpole-pop_2
+  if birth_pulses = 2 [   ;divide initial tadpoles per patch by three because there are 3 birth pulses, this way total initial tadpoles is the same
+    let new-tadpoles round (ini-tadpoles-per-pondpatch) / 2
+   sprout-tadpoles new-tadpoles [
+  ;sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 2                  ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k  9890
+   ; set est 0.1 + random-float 0.1 ;variation in establishment
+    set est baseline_est
+    set expo 0.020 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 115
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+  ]
+
+    if birth_pulses = 3 [
+    let new-tadpoles round ((ini-tadpoles-per-pondpatch) / 3)    ;divide initial tadpoles per patch by three because there are 3 birth pulses, this way total initial tadpoles is the same
+    sprout-tadpoles new-tadpoles [
+    ;sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 2                  ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k  9890
+    set est baseline_est  ;variation in establishment
+    set expo 0.020  ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 115
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+  ]
+  ]
+end
+
+;populate patches with tadpoles with birth cohort 3
+;there's probably an easier way to do this than creating multiple submodels but will do this for now
+to initialize-tadpole-pop_3
+  let new-tadpoles3 round ((ini-tadpoles-per-pondpatch) / 3)
+  sprout-tadpoles new-tadpoles3 [
+ ; sprout-tadpoles ini-tadpoles-per-pondpatch [
+    set b_cohort 3                  ;specify birth cohort
+    set shape "frog top"
+    set size 0.2
+    set spn 0
+    set imm random 100
+    set s_k  9890
+    set est baseline_est  ;variation in establishment
+    set expo 0.02 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
+                                  ;functions as a removal rate of parasites from the environemnt due to contact process
+    set infprob est * expo
+    set color 125
+    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
+    let face-dir-x [ pxcor ] of dir-neighbor
+    let face-dir-y [ pycor ] of dir-neighbor
+    facexy face-dir-x face-dir-y
+    rt random 40
+    ;rt random 270  ;patch-at-heading-and-distance -90 1
+    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
+    ]
+end
+
+to tadpoles-move
+  let n-mobile-tadpoles round (t-movement * count tadpoles)                           ;10% of tadpoles move to a different perimeter patch each tick
+    ask n-of n-mobile-tadpoles tadpoles [
+      let nextpatch patches with [pp = 1]
+      move-to one-of nextpatch
+      let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]    ;check with ani about why direction matters
+     ; let dir-neighbor min-n-of patches with [ pond = 0 ] [ distance myself ]
+      let face-dir-x [ pxcor ] of dir-neighbor
+      let face-dir-y [ pycor ] of dir-neighbor
+      facexy face-dir-x face-dir-y
+      rt random 40
+      fd (0.32 + random-float 0.13)
+  ]
+end
+
+;to metamorphs-move
+;let n-land-metamorphs round (0.20 * count metamorphs)
+;ask n-of n-land-metamorphs metamorphs [
+;    ;move-to one-of patches with [ pond = 1 and pp = 0] ;metamorphs in deep pond
+;    move-to one-of patches with [ perimeter-land = 1]
+;  ]
+;end
+
+to metamorphs-move-complex
+ask metamorphs[
+    set on-land 0          ;re-set it so that all metamorphs are defaulted to be equally likely to move between land and water, regardless of what type of patch currently on
+  ]
+let n-land-metamorphs round (m-land * count metamorphs)
+ask n-of n-land-metamorphs metamorphs[
+set on-land 1             ;select a subset of metamorphs to move to a land patch
+  ]
+ask metamorphs [
+    ifelse on-land = 1
+    [move-to one-of patches with [ perimeter-land = 1]]
+    [move-to one-of patches with [ pond = 1  and pp = 1]]
+  ]
+end
+
+to metamorphs-move-simple
+ask metamorphs [                                                             ;all metamorphs move to another perimeter patch
+    move-to one-of patches with [ pond = 1  and pp = 1]
+    ]
+end
+
+to update-infections
+  let z1 pz0             ;upon establishment, a zoospore takes ~7 days to mature into a sporangia
+      let z2 pz1
+      let z3 pz2
+      let z4 pz3
+      let z5 pz4
+      let z6 pz5
+      let z7 pz6
+      set pz1 z1
+      set pz2 z2
+      set pz3 z3
+      set pz4 z4
+      set pz5 z5
+      set pz6 z6
+      set pz7 z7
+      set pz0 0
+      set spn spn + pz7
+      set zspn-inc zspn-inc + pz7
+end
+
+to metamorphosis
+        hatch-metamorphs 1 [
+          set aid 1
+          set b_cohort [ b_cohort ] of myself     ;keep track of birth cohort identity
+          set bd [ bd ] of myself       ;maintain bd infection through metamorphosis (McMahon & Rohr, 2015)
+          set expo [expo] of myself
+          set est [est] of myself
+          set infprob [infprob] of myself
+;          set new-pz0 [new-pz0] of myself
+          if bd = 1 [
+;previously all pz0-pz7 was commented out so prezoosporangia were not carried through metamorphosis
+;             set pz0 0.5 * ([ pz0 ] of myself)
+;             set pz1 0.5 * ([ pz1 ] of myself)
+;             set pz2 0.5 * ([ pz2 ] of myself)
+;             set pz3 0.5 * ([ pz3 ] of myself)
+;             set pz4 0.5 * ([ pz4 ] of myself)
+;             set pz5 0.5 * ([ pz5 ] of myself)
+;             set pz6 0.5 * ([ pz6 ] of myself)
+;             set pz7 0.5 * ([ pz7 ] of myself)
+;             set spn 0.5 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 50% for now** maintain spn load proportional to tadpole infection intensity
+             set pz0 [ pz0 ] of myself   ;trying 100% carryover of Bd infections through metamorphosis
+             set pz1 [ pz1 ] of myself
+             set pz2 [ pz2 ] of myself
+             set pz3 [ pz3 ] of myself
+             set pz4 [ pz4 ] of myself
+             set pz5 [ pz5 ] of myself
+             set pz6 [ pz6 ] of myself
+             set pz7 [ pz7 ] of myself
+             set spn [ spn ] of myself   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 50% for now** maintain spn load proportional to tadpole infection intensity
+
+    ]
+          set smax baseline_smax
+          set shape "frog top"
+          set size 0.4
+          set color brown
+          ]
+        set num-metamorphosis num-metamorphosis + 1
+        die                             ;remove tadpole from population once it's metamorphosed
+end
+
+to tadpole-zsp-shedding-and-reinfection
+      set spn spn - round (0.2 * spn)     ;Briggs 2010 uses 0.2 lost per day
+      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
+      set pz0 f-selfinfect ;pz0 + 1
+      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
+      ask patch-here [
+      set zsp zsp + same-patch-zsp
+        ]
+      let near-shallow-patch-zsp round (zsp-release - f-selfinfect - same-patch-zsp) ;10% of zoospores in pool deposited onto neighbor patch
+      ask one-of patches in-radius 1 [
+      set zsp zsp + near-shallow-patch-zsp
+        ]
+end
+
+to max-bd-tadpole-shedding
+      set spn spn - round (0.2 * spn)                                ;Briggs 2010 uses 0.2 lost per day
+      let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+
+      let f-selfinfect round (0.05 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
+                                                                    ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
+                                                                    ;but they are prevented from re-entering the zoospore pool
+  ;     set pz0 f-selfinfect ;pz0 + 1                               ;no self-reinfection since they are at their max so all self-reinfections fail
+      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
+      ask patch-here [
+      set zsp zsp + same-patch-zsp
+        ]
+      let near-shallow-patch-zsp round (zsp-release - f-selfinfect - same-patch-zsp) ;10% of zoospores in pool deposited onto neighbor patch
+      ask one-of patches in-radius 1 [
+      set zsp zsp + near-shallow-patch-zsp
+        ]
+end
+
+to infection-step
+    set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
+    ;print nspn
+    let z-mort 0.284
+    let frogs count tadpoles-here + count metamorphs-here
+    let total-expo sum [expo] of turtles ;contact process (exposure) is dependent on the number of hosts - i.e. more hosts, more likely a zoospore will find one
+    let p-left-in-water exp ( - (z-mort + total-expo) )
+    let surviving-in_water round(zsp * p-left-in-water) ;deterministic how many survive in water
+    let successful-infections round( zsp * (1 - p-left-in-water) * (sum [expo * est] of turtles) / (z-mort + total-expo)) ;assumed number of zoospores that have established
+    set new-infections rnd:weighted-n-of-with-repeats successful-infections turtles [infprob]
+   ; show new-infections ;new infections is a list, not an agentset, because it can contain the same agent multiple times within the list
+   ;show rnd:weighted-n-of-with-repeats successful-infections turtles [infprob]
+   ;show length new-infections
+     ask turtles-here [
+     ; show filter [i -> i = self] new-infections
+      let my-new-infections filter [i -> i = self] new-infections ;subset new-infections list to create a list of only myself
+      if length my-new-infections > 0[
+      set new-pz0 length my-new-infections  ;the length of the subsetted list is how many new zoospores were established in this specific host
+     ; show new-pz0
+      set pz0 pz0 + new-pz0 ;add new infections to previous pz0
+    ]
+  ]
+    set zsp surviving-in_water
+end
+
+to create-data-file
+   if not file-exists? (word "results/no_Bd_baseline_bddynamics.csv") [
+   ; file-open (word "results/baseline_bddynamics" date-and-time ".csv")
+    file-open (word "results/no_Bd_baseline_bddynamics.csv")
+    file-print "day, N_tadpoles, INF_tadpoles, dead_frogs, zspn, zsp, prevzsp, lambda, zspn-inc, N_metamorphs, INF_metamorphs"  ;dead_frogs includes all life stages (tadpoles, metas, frogs) dead with Bd but really only metas are dying of Bd
+    file-close
+    ]
+end
+
+to write-data-file
+  file-open (word "results/no_Bd_baseline_bddynamics.csv")
+  file-type ticks file-type "," file-type count tadpoles file-type "," file-type count tadpoles with [ bd = 1 ] file-type "," file-type bd-mortality file-type "," file-type n-zspn file-type ","file-type sum [ zsp ] of patches file-type "," file-type sum [ prev-zsp ] of patches file-type "," file-type lambda-zsp file-type "," file-type zspn-inc file-type "," file-type count metamorphs file-type "," file-type count metamorphs with [ bd = 1 ] file-type ","
+  file-print ""
+  file-close
+end
+
+to create-pond
+  let nbpatches patches with [ border = 0 ]
+  let counter 0
     ask one-of nbpatches [
       set pond 1
       set counter counter + 1
@@ -118,17 +715,10 @@ to setup
           ]
         ]
       ]
-  ]
-    ;below code specifies which patches are on the perimeter.
-    ask patches with [ pond = 1 ] [
-     if count neighbors4 with [ pond = 0 ] > 0 [
-        set pp 1
-        set pcolor 107
-      ]
-  ]
-   ;reports the shoreline in the command center (if I want that)
-    ask patches with [pp = 1][
-      if count neighbors4 with [ pond = 0 ] = 4 [
+end
+
+to calculate-shoreline
+        if count neighbors4 with [ pond = 0 ] = 4 [
         set shoreline shoreline + 4
       ]
       if count neighbors4 with [ pond = 0] = 3 [
@@ -140,453 +730,6 @@ to setup
       if count neighbors4 with [ pond = 0] = 1 [
         set shoreline shoreline + 1
       ]
-    ]
-   ; print shoreline  ;in case I want to know what the shoreline/perimeter is
-
-    let perimeterp patches with [ pp = 1 ]
-    ask perimeterp [
-     initialize-tadpole-pop
-    if inf-ponds = 1 [
-      initialize-Bd-tadpoles
-    ]
-  ]
-
-
-  ;#####Vaccination coverage 100%: all susceptible (imm > 66 to imm < 66 and imm > 33 to imm < 33)
-;  ask frogs with [ imm > 66 and vac = 0 ] [
-;    set imm random 67
-;    set vac 1
-;    ]
-;  ask frogs with [ imm > 33 and imm < 67 and vac = 0 ] [
-;    set imm random 34
-;    set vac 1
-;    ]
-    ;]
-
-;  if Bd-inf-frogs > 0 [
-;    ask n-of Bd-inf-frogs frogs [
-;      set bd 1
-;      set color white
-;      set spn 100
-;    ]
-;  ]
-
-  ;if not file-exists? (word "results/baseline_bddynamics" date-and-time ".csv") [
-  if not file-exists? (word "results/no_Bd_baseline_bddynamics.csv") [
-   ; file-open (word "results/baseline_bddynamics" date-and-time ".csv")
-    file-open (word "results/no_Bd_baseline_bddynamics.csv")
-    file-print "day, N_tadpoles, INF_tadpoles, dead_frogs, zspn, zsp, prevzsp, lambda, zspn-inc, N_metamorphs, INF_metamorphs"  ;dead_frogs includes all life stages (tadpoles, metas, frogs) dead with Bd but really only metas are dying of Bd
-    file-close
-    ]
-  reset-ticks
-end
-
-to go
-  random-seed behaviorspace-run-number
-  if ticks = 90 [ stop ]
-  ask tadpoles [
-    set aid aid + 1                  ;adding a day to the tadpole's age
-    if random-float 1 < 0.06 [       ;tadpole daily mortality probability estimated from Govindarajulu 2006
-      die
-    ]
-  ]
-  if birth_pulses = 2[
-  if ticks = 7 [
-    ask patches with [ pp = 1 ] [
-     initialize-tadpole-pop_2
-    ]
-  ]
-  ]
-  if birth_pulses = 3[
-  if ticks = 7 [
-    ask patches with [ pp = 1 ] [
-     initialize-tadpole-pop_2
-    ]
-  ]
-  if ticks = 21 [
-    ask patches with [ pp = 1 ] [
-     initialize-tadpole-pop_3
-    ]
-  ]
-  ]
-  ask metamorphs [
-    set aid aid + 1                   ;adding a day to the metamorph's age
-    if random-float 1 < 0.09 [        ;baseline daily metamorph mortality
-      die
-    ]
-  ]
-
-  if any? tadpoles with [ aid > 55 ] [  ;initiate metamorphosis in (some) tadpoles greater than 55
-    ask tadpoles with [ aid > 55 ] [
-      if random-float 1 < 0.11 [
-        hatch-metamorphs 1 [
-          set aid 1
-          set b_cohort [ b_cohort ] of myself     ;keep track of birth cohort identity
-          set bd [ bd ] of myself       ;maintain bd infection through metamorphosis (McMahon & Rohr, 2015)
-          if bd = 1 [
-            set spn 0.1 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 10% for now** maintain spn load proportional to tadpole infection intensity
-          ]
-          set smax (16000 + random 231)
-          set shape "frog top"
-          set size 0.4
-          set color brown
-          ]
-        die                             ;remove tadpole from population once it's metamorphosed
-        ]
-    ]
-    ]
-  if ticks = 75 [
-    if any? tadpoles [
-      ask tadpoles [
-        hatch-metamorphs 1 [
-          set aid 1
-          set b_cohort [ b_cohort ] of myself     ;keep track of birth cohort identity
-          set bd [ bd ] of myself
-          if bd = 1 [
-             set spn 0.1 * ([ spn ] of myself)   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 10% for now**
-          ]
-          set smax (40000 + random 231)
-          set shape "frog top"
-          set size 0.4
-          set color brown
-          ]
-        die
-      ]
-    ]
-  ]
- ;tadpole movement submodel
-  if SimplePond = FALSE [
-    let n-mobile-tadpoles round (0.10 * count tadpoles)                           ;10% of tadpoles move to a different perimeter patch each tick
-    ask n-of n-mobile-tadpoles tadpoles [
-      let nextpatch patches with [pp = 1]
-      move-to one-of nextpatch
-      let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]    ;check with ani about why direction matters
-      let face-dir-x [ pxcor ] of dir-neighbor
-      let face-dir-y [ pycor ] of dir-neighbor
-      facexy face-dir-x face-dir-y
-      rt random 40
-      fd (0.32 + random-float 0.13)
-      ]
-    ask metamorphs [                                                             ;all metamorphs move to another perimeter patch
-      move-to one-of patches with [ pond = 1  and pp = 1]
-    ]
-    ]
-  let pondppatches patches with [ pond = 1 and pp = 1]
-  ask pondppatches [
-    set prev-zsp zsp                                                            ;store the last tick's zoospores as previous zoospores
-    set pcolor scale-color red zsp 1000000 0
-    ]
-  if ticks > 0 [
-;    if not any? tadpoles [
-;      stop
-;      ]
-    ;let bd-tadpoles tadpoles with [ bd = 1  and spn < 8000]            ;attempting to prevent tadpoles with spn loads greater than 8000 from increasing infection load
-    let bd-tadpoles tadpoles with [ bd = 1  and spn < s_k ]
-    ask bd-tadpoles
-    [
-      let z1 pz0
-      let z2 pz1
-      let z3 pz2
-      let z4 pz3
-      let z5 pz4
-      let z6 pz5
-      let z7 pz6
-      set pz1 z1
-      set pz2 z2
-      set pz3 z3
-      set pz4 z4
-      set pz5 z5
-      set pz6 z6
-      set pz7 z7
-      set pz0 0
-      set spn spn + pz7
-      set zspn-inc zspn-inc + pz7
-
-;      if spn >= s_k [
-;        set bd-mortality bd-mortality + 1
-;        die
-;        ]
-      if spn >= 8000 [
-        set color red
-        ]
-      if spn = 0 [
-        set bd 0
-        set color green
-        ;stop
-        ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
-      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-
-      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
-      ;;#####                                                    ;simulating heterogenous susceptibility in frogs
-;      let f-selfinfect 0
-;      ifelse imm > 66
-;      [ set f-selfinfect round (0.05 * zsp-release) ]                    ;fully susceptible
-;      [ ifelse imm > 33
-;        [ set f-selfinfect round (0.5 * 0.05 * zsp-release) ]
-;        [ set f-selfinfect round (0.25 * 0.05 * zsp-release) ]
-;      ]
-      ;####
-      ;let hostwho who
-      ;hatch-prezsp f-selfinfect [
-        ;ht
-        ;set counter -7
-        ;set host hostwho
-        ;]
-      set pz0 f-selfinfect ;pz0 + 1
-      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
-;      ask patch-here [
-;      set zsp zsp + (zsp-release - f-selfinfect)
-;        ]
-      ask patch-here [
-      set zsp zsp + same-patch-zsp
-        ]
-      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
-      ask one-of patches in-radius 1 [
-      set zsp zsp + near-shallow-patch-zsp
-        ]
-      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
-      ;ask min-one-of patches [distance myself with [pond = 1 and pp = 0]] [
-      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
-      set zsp zsp + nearest-deep-patch-zsp
-        ]
-    ]
-    let maxbd-tadpoles tadpoles with [ bd = 1  and spn >= s_k ]      ;maxbd-tadpoles are tadpoles that have met or exceeded sporangia carrying capacity
-    ask maxbd-tadpoles [                                             ;maxbd-tadpoles cannot get reinfected but can still contribute to the zoospore pool and clear sporangia
-      if spn >= 8000 [                                               ;set these tadpoles as red if their sporangia load is above 8000
-        set color red
-        ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)       ;sporangia loss rate 0.148 – 0.153 per day
-      let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-
-      let f-selfinfect round (0.05 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
-                                                                    ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
-                                                                    ;but they are prevented from re-entering the zoospore pool
-       set pz0 f-selfinfect ;pz0 + 1
-      let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
-;      ask patch-here [
-;      set zsp zsp + (zsp-release - f-selfinfect)
-;        ]
-      ask patch-here [
-      set zsp zsp + same-patch-zsp
-        ]
-      let near-shallow-patch-zsp round (0.1 * (zsp-release - f-selfinfect - same-patch-zsp)) ;10% of zoospores in pool deposited onto neighbor patch
-      ask one-of patches in-radius 1 [
-      set zsp zsp + near-shallow-patch-zsp
-        ]
-      let nearest-deep-patch-zsp zsp-release - f-selfinfect - same-patch-zsp - near-shallow-patch-zsp ;remaining approx 50% of zoospores deposited onto nearest deepest patch
-      ;ask min-one-of patches [distance myself with [pond = 1 and pp = 0]] [
-      ask min-one-of patches with [pond = 1 and pp = 0] [distance myself] [
-      set zsp zsp + nearest-deep-patch-zsp
-        ]
-    ]
-
-    let bd-metamorphs metamorphs with [ bd = 1 ]
-    ask bd-metamorphs
-    [                 ;upon establishment, a zoospore takes ~7 days to mature into a sporangia
-      let z1 pz0
-      let z2 pz1
-      let z3 pz2
-      let z4 pz3
-      let z5 pz4
-      let z6 pz5
-      let z7 pz6
-      set pz1 z1
-      set pz2 z2
-      set pz3 z3
-      set pz4 z4
-      set pz5 z5
-      set pz6 z6
-      set pz7 z7
-      set pz0 0
-      set spn spn + pz7
-      set zspn-inc zspn-inc + pz7
-
-      if spn >= smax [
-        set bd-mortality bd-mortality + 1
-        die
-        ]
-      ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
-        ;set color red
-        ;]
-      if spn = 0 [            ;uninfected metamorphs appear green
-        set bd 0
-        set color green
-        ]
-      set spn spn - round ((0.148 + random-float 0.006) * spn)   ;sporangia loss rate 0.148 – 0.153 per day
-      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-
-      let f-selfinfect round (0.05 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
-
-
-      ;;#####                                                    ;simulating heterogenous susceptibility in frogs
-;      let f-selfinfect 0
-;      ifelse imm > 66
-;      [ set f-selfinfect round (0.05 * zsp-release) ]                    ;fully susceptible
-;      [ ifelse imm > 33
-;        [ set f-selfinfect round (0.5 * 0.05 * zsp-release) ]
-;        [ set f-selfinfect round (0.25 * 0.05 * zsp-release) ]
-;      ]
-      ;####
-      ;let hostwho who
-      ;hatch-prezsp f-selfinfect [
-        ;ht
-        ;set counter -7
-        ;set host hostwho
-        ;]
-
-
-      set pz0 f-selfinfect ;pz0 + 1
-      ask patch-here [
-        set zsp zsp + (zsp-release - f-selfinfect)
-        ]
-      ]
-    ]
-;  let pondpatches patches with [ pond = 1 ]
-;  ask pondpatches [
-;    set prev-zsp zsp
-;    ]
-  ask pondppatches [
-    set nspn (sum [ spn ] of tadpoles-here + sum [ spn ] of metamorphs-here)                           ;count total number of zoosporangia on all infected frogs
-    ;print nspn
-    if zsp > 0 [                                                  ;zoospore-decay  loss rate of zoospore from the zoospore pool 0.248 – 0.252
-      let zsp-d round ((0.248 + random-float 0.005) * zsp)
-      set zsp (zsp - zsp-d)
-    ]
-    ;set zsp (zsp + round (nspn * 17.8))                          ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI) ;
-    let prop-zsp round (0.05 * zsp)                               ;proportion of zoospores that encounter hosts   from Farthing et al., 2021; .001
-    let prop-zsp-host round (0.5 * prop-zsp)                      ;proportion of zoospores successfully infect host after encounter; .0001
-    repeat prop-zsp-host [            ;prob of contact is not dependent on hosts ******
-      if any? turtles-here [
-        ask one-of turtles-here [
-          set pz0 pz0 + 1
-          set bd 1                                               ;simulating heterogenous susceptibility
-          set color white
-          ;####
-;          ifelse imm > 66
-;          [ set bd 1 set pz0 pz0 + 1 ]
-;          [ ifelse imm > 33
-;            [ if random-float 1 < 0.51 [
-;              set bd 1 set pz0 pz0 + 1
-;              ]
-;            ]
-;            [ if random-float 1 < 0.26 [
-;              set bd 1 set pz0 pz0 + 1
-;              ]
-;              ]
-;            ]
-          ;###
-;          let hostwho who
-;          hatch-prezsp 1 [
-;            ht
-;            set counter -7
-;            set host hostwho
-;            ]
-          ]
-        ]
-    ]
-    set zsp (zsp - prop-zsp)
-    ]
-
-;  ask prezsp [
-;    set counter counter + 1
-;    if counter = 0 [
-;      let hostid host
-;      if any? frogs with [ who = hostid ] [
-;        ask frog hostid [
-;          set bd 1
-;          set color white
-;          set spn spn + 1
-;          set zspn-inc zspn-inc + 1                            ;update incidence counter
-;          ]
-;      ]
-;      die
-;    ]
-;  ]
-
-  if ticks > 1 [
-    if sum [ prev-zsp ] of patches > 0 [
-      set lambda-zsp precision (sum [ zsp ] of patches / sum [ prev-zsp ] of patches) 2
-      ]
-    ]
-  set n-zspn sum [ spn ] of tadpoles
-  file-open (word "results/no_Bd_baseline_bddynamics.csv")
-  ;file-open (word "results/baseline_bddynamics" date-and-time ".csv")
-  file-type ticks file-type "," file-type count tadpoles file-type "," file-type count tadpoles with [ bd = 1 ] file-type "," file-type bd-mortality file-type "," file-type n-zspn file-type ","file-type sum [ zsp ] of patches file-type "," file-type sum [ prev-zsp ] of patches file-type "," file-type lambda-zsp file-type "," file-type zspn-inc file-type "," file-type count metamorphs file-type "," file-type count metamorphs with [ bd = 1 ] file-type ","
-  file-print ""
-  file-close
-  set zspn-inc 0
-  tick
-end
-
-;populate patches with tadpoles
-to initialize-tadpole-pop
-  sprout-tadpoles ini-tadpoles-per-pondpatch [
-    set b_cohort 1        ;specify birth cohort
-    set shape "frog top"
-    set size 0.2
-    set imm random 100
-    set s_k (9890 + random 231)
-    set color 65
-    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
-    let face-dir-x [ pxcor ] of dir-neighbor
-    let face-dir-y [ pycor ] of dir-neighbor
-    facexy face-dir-x face-dir-y
-    rt random 40
-    ;rt random 270  ;patch-at-heading-and-distance -90 1
-    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
-    ]
-end
-
-;select a certain number of tadpoles in each patch to have Bd
-to initialize-Bd-tadpoles
-  if Bd-inf-tadpoles-per-infpond > 0 [
-    ask n-of Bd-inf-tadpoles-per-infpond tadpoles-here [
-      set bd 1
-      set color white
-      set spn 100
-      ]
-    ]
-end
-
-;populate patches with tadpoles with birth cohort 2
-;there's probably an easier way to do this than creating multiple submodels but will do this for now
-to initialize-tadpole-pop_2
-  sprout-tadpoles ini-tadpoles-per-pondpatch [
-    set b_cohort 2                  ;specify birth cohort
-    set shape "frog top"
-    set size 0.2
-    set imm random 100
-    set s_k (9890 + random 231)
-    set color 115
-    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
-    let face-dir-x [ pxcor ] of dir-neighbor
-    let face-dir-y [ pycor ] of dir-neighbor
-    facexy face-dir-x face-dir-y
-    rt random 40
-    ;rt random 270  ;patch-at-heading-and-distance -90 1
-    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
-    ]
-end
-
-;populate patches with tadpoles with birth cohort 2
-;there's probably an easier way to do this than creating multiple submodels but will do this for now
-to initialize-tadpole-pop_3
-  sprout-tadpoles ini-tadpoles-per-pondpatch [
-    set b_cohort 3                  ;specify birth cohort
-    set shape "frog top"
-    set size 0.2
-    set imm random 100
-    set s_k (9890 + random 231)
-    set color 125
-    let dir-neighbor min-one-of patches with [ pond = 0 ] [ distance myself ]
-    let face-dir-x [ pxcor ] of dir-neighbor
-    let face-dir-y [ pycor ] of dir-neighbor
-    facexy face-dir-x face-dir-y
-    rt random 40
-    ;rt random 270  ;patch-at-heading-and-distance -90 1
-    fd (0.32 + random-float 0.13) ;(0.25 + random-float 0.19)
-    ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -610,8 +753,8 @@ GRAPHICS-WINDOW
 20
 0
 20
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -651,10 +794,10 @@ NIL
 1
 
 MONITOR
-1006
-17
-1063
-62
+703
+14
+760
+59
 day
 ticks + 1
 17
@@ -669,9 +812,9 @@ SLIDER
 ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
-100000
-100.0
-100
+1000
+600.0
+10
 1
 NIL
 HORIZONTAL
@@ -679,10 +822,10 @@ HORIZONTAL
 SLIDER
 15
 339
-211
+276
 372
-Bd-inf-tadpoles-per-infpond
-Bd-inf-tadpoles-per-infpond
+Bd-inf-tadpoles-per-infpondpatch
+Bd-inf-tadpoles-per-infpondpatch
 0
 10
 1.0
@@ -692,10 +835,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-944
-73
-1086
-118
+702
+66
+844
+111
 Tadpole population size
 count tadpoles
 17
@@ -703,10 +846,10 @@ count tadpoles
 11
 
 PLOT
-942
-136
-1176
-295
+700
+118
+934
+277
 Sporangia per infected tadpole
 Sporangia/host
 No. of hosts
@@ -718,13 +861,13 @@ false
 false
 "" ""
 PENS
-"default" 100.0 1 -16777216 true "" "histogram [ spn ] of tadpoles"
+"default" 100.0 1 -16777216 true "" "histogram [ spn ] of tadpoles with [bd = 1]"
 
 MONITOR
-1158
-351
-1229
-396
+947
+276
+1018
+321
 Zoospores
 sum  [ zsp ] of patches with [ pond = 1 ]
 17
@@ -732,10 +875,10 @@ sum  [ zsp ] of patches with [ pond = 1 ]
 11
 
 MONITOR
-1179
-137
-1269
-182
+937
+119
+1027
+164
 Total sporangia
 sum [ spn ] of tadpoles with [ bd = 1 ]
 17
@@ -743,10 +886,10 @@ sum [ spn ] of tadpoles with [ bd = 1 ]
 11
 
 MONITOR
-1076
-73
-1192
-118
+851
+65
+967
+110
 Infected tadpoles
 count tadpoles with [ bd = 1 ]
 17
@@ -754,17 +897,17 @@ count tadpoles with [ bd = 1 ]
 11
 
 PLOT
-936
-313
-1136
-463
+1045
+281
+1245
+431
 Zoospore count
 days
 Zoospores
 0.0
-10.0
+90.0
 0.0
-10.0
+200000.0
 true
 false
 "" ""
@@ -802,21 +945,21 @@ NIL
 HORIZONTAL
 
 MONITOR
-1325
-364
-1400
-409
+764
+14
+892
+59
 NIL
-lambda-zsp
+round lambda-zsp
 17
 1
 11
 
 PLOT
-1283
-140
-1483
-290
+1041
+122
+1241
+272
 per capita sporangia
 day
 mean number of sporangia
@@ -858,10 +1001,10 @@ SimplePond
 -1000
 
 MONITOR
-1219
-73
-1380
-118
+977
+66
+1138
+111
 Metamorph population size
 count metamorphs
 17
@@ -869,10 +1012,10 @@ count metamorphs
 11
 
 MONITOR
-1400
-73
-1532
-118
+1158
+66
+1290
+111
 Infected metamorphs
 count metamorphs with [ bd = 1 ]
 17
@@ -880,10 +1023,10 @@ count metamorphs with [ bd = 1 ]
 11
 
 MONITOR
-1183
-189
-1266
-234
+941
+171
+1024
+216
 spn tadpoles
 sum [ spn ] of tadpoles
 17
@@ -891,23 +1034,12 @@ sum [ spn ] of tadpoles
 11
 
 MONITOR
-1186
-241
-1268
-286
+944
+223
+1026
+268
 spn meta
-sum [ spn ] of metamorphs
-17
-1
-11
-
-MONITOR
-1184
-454
-1255
-499
-NIL
-shoreline
+round sum [ spn ] of metamorphs
 17
 1
 11
@@ -921,8 +1053,262 @@ birth_pulses
 birth_pulses
 1
 3
-3.0
+1.0
 1
+1
+NIL
+HORIZONTAL
+
+PLOT
+701
+284
+936
+449
+Sporangia per infected metamorph
+Sporangia/host
+No. of hosts
+0.0
+4000.0
+0.0
+20.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ spn ] of metamorphs with [bd = 1]"
+
+PLOT
+221
+388
+421
+538
+pz0 per metamorph
+pz0 per meta
+no. metamorphs
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of metamorphs"
+
+PLOT
+435
+388
+635
+538
+pz0 per tadpole
+pz0 per tadpole
+no. tadpoles
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of tadpoles"
+
+PLOT
+1049
+439
+1249
+589
+Zsp Count
+day
+zoospores
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"zsp" 1.0 0 -16777216 true "" "plot sum [ zsp ] of patches"
+
+SLIDER
+702
+466
+874
+499
+t-movement
+t-movement
+0
+1
+0.25
+0.25
+1
+NIL
+HORIZONTAL
+
+SLIDER
+703
+511
+875
+544
+m-land
+m-land
+0
+1
+0.1
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+702
+556
+874
+589
+meta-mort
+meta-mort
+0
+0.09
+0.02
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+514
+556
+686
+589
+tad-mort
+tad-mort
+0
+0.06
+0.06
+0.1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+885
+506
+995
+551
+% metas on land
+count metamorphs with [on-land = 1] / count metamorphs
+2
+1
+11
+
+MONITOR
+1073
+11
+1242
+56
+prop. of deaths due to Bd
+bd-mortality / (bd-mortality + baseline-mortality)
+2
+1
+11
+
+MONITOR
+899
+10
+1068
+55
+Number of perimeter patches
+count patches with [pp = 1]
+17
+1
+11
+
+MONITOR
+1245
+124
+1372
+169
+NIL
+num-metamorphosis
+17
+1
+11
+
+MONITOR
+1247
+177
+1339
+222
+NIL
+bd-mortality
+17
+1
+11
+
+MONITOR
+1246
+227
+1372
+272
+NIL
+baseline-mortality
+17
+1
+11
+
+MONITOR
+1256
+286
+1343
+331
+meta pop size
+num-metamorphosis - (baseline-mortality + bd-mortality)
+17
+1
+11
+
+SLIDER
+17
+508
+189
+541
+baseline_smax
+baseline_smax
+0
+1000000
+562.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+14
+137
+186
+170
+last-day
+last-day
+0
+250
+90.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+14
+251
+186
+284
+baseline_est
+baseline_est
+0
+1
+0.2
+0.01
 1
 NIL
 HORIZONTAL
@@ -1285,16 +1671,22 @@ NetLogo 6.2.2
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="baseline_100ite" repetitions="100" runMetricsEveryStep="true">
+  <experiment name="tadpole_movement1" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <enumeratedValueSet variable="frogs-per-pond">
-      <value value="30"/>
-    </enumeratedValueSet>
+    <timeLimit steps="54"/>
+    <metric>avg_spn_tadpoles</metric>
+    <metric>var_spn_tadpoles</metric>
+    <metric>aggregation_tadpoles</metric>
+    <metric>prop_not_s_k</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="Bd-inf-frogs-per-infpond">
+    <steppedValueSet variable="t-movement" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
       <value value="1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-coverage">
@@ -1306,179 +1698,185 @@ NetLogo 6.2.2
     <enumeratedValueSet variable="v-efficacy">
       <value value="0"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
+    <enumeratedValueSet variable="birth_pulses">
       <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="het_sus_ite100" repetitions="100" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <enumeratedValueSet variable="frogs-per-pond">
-      <value value="30"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="SimplePond">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="Bd-inf-frogs-per-infpond">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-coverage">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="inf-ponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-efficacy">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="vacc100_100ite" repetitions="100" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <enumeratedValueSet variable="frogs-per-pond">
-      <value value="30"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="SimplePond">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="Bd-inf-frogs-per-infpond">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-coverage">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="inf-ponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-efficacy">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="vacccov50%" repetitions="100" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <enumeratedValueSet variable="frogs-per-pond">
-      <value value="30"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="SimplePond">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="Bd-inf-frogs-per-infpond">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-coverage">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="inf-ponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-efficacy">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="hetsus_100ite" repetitions="100" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <enumeratedValueSet variable="frogs-per-pond">
-      <value value="30"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="SimplePond">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="Bd-inf-frogs-per-infpond">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-coverage">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="inf-ponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-efficacy">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="bl_100ite" repetitions="100" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <enumeratedValueSet variable="frogs-per-pond">
-      <value value="30"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="SimplePond">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="Bd-inf-frogs-per-infpond">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-coverage">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="inf-ponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-efficacy">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="baseline_practice_experiment" repetitions="100" runMetricsEveryStep="true">
-    <setup>setup</setup>
-    <go>go</go>
-    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpond">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="SimplePond">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-coverage">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="inf-ponds">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="v-efficacy">
-      <value value="0"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
-      <value value="1001"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
-      <value value="1"/>
+      <value value="200"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="baseline_experiment3" repetitions="5" runMetricsEveryStep="true">
+  <experiment name="tadpole_movement3" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <metric>ticks</metric>
-    <metric>count tadpoles</metric>
-    <metric>count tadpoles with [ bd = 1 ]</metric>
-    <metric>bd-mortality</metric>
-    <metric>n-zspn</metric>
-    <metric>sum [ zsp ] of patches</metric>
-    <metric>sum [ prev-zsp ] of patches</metric>
-    <metric>lambda-zsp</metric>
-    <metric>zspn-inc</metric>
+    <timeLimit steps="54"/>
+    <metric>var_spn_abun_tadpoles</metric>
+    <metric>avg_spn_abun_tadpoles</metric>
+    <metric>aggregation_abun_tadpoles</metric>
+    <metric>prop_not_s_k_abun</metric>
+    <metric>avg_spn_inten_tadpoles</metric>
+    <metric>var_spn_inten_tadpoles</metric>
+    <metric>aggregation_inten_tadpoles</metric>
+    <metric>prop_not_s_k_inten</metric>
+    <metric>tad_prev</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="t-movement" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="meta_pop_size" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
     <metric>count metamorphs</metric>
-    <metric>count metamorphs with [ bd = 1 ]</metric>
-    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpond">
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="meta-mort" first="0" step="0.02" last="0.09"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="tad_meta_mortality" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="meta-mort" first="0.03" step="0.03" last="0.09"/>
+    <steppedValueSet variable="tad-mort" first="0.03" step="0.015" last="0.06"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="tadpole_movement4" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="54"/>
+    <metric>var_spn_abun_tadpoles</metric>
+    <metric>avg_spn_abun_tadpoles</metric>
+    <metric>aggregation_abun_tadpoles</metric>
+    <metric>prop_not_s_k_abun</metric>
+    <metric>avg_spn_inten_tadpoles</metric>
+    <metric>var_spn_inten_tadpoles</metric>
+    <metric>aggregation_inten_tadpoles</metric>
+    <metric>prop_not_s_k_inten</metric>
+    <metric>tad_prev</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="t-movement" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
       <value value="10"/>
     </enumeratedValueSet>
+  </experiment>
+  <experiment name="tadpole_movement3" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="54"/>
+    <metric>var_spn_abun_tadpoles</metric>
+    <metric>avg_spn_abun_tadpoles</metric>
+    <metric>aggregation_abun_tadpoles</metric>
+    <metric>prop_not_s_k_abun</metric>
+    <metric>avg_spn_inten_tadpoles</metric>
+    <metric>var_spn_inten_tadpoles</metric>
+    <metric>aggregation_inten_tadpoles</metric>
+    <metric>prop_not_s_k_inten</metric>
+    <metric>tad_prev</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="t-movement" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-coverage">
       <value value="0"/>
@@ -1489,22 +1887,296 @@ NetLogo 6.2.2
     <enumeratedValueSet variable="v-efficacy">
       <value value="0"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
-      <value value="1001"/>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="meta_land_movement1" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>var_spn_inten_metas</metric>
+    <metric>aggregation_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="m-land" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="tadpole_movement5" repetitions="25" sequentialRunOrder="false" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="54"/>
+    <metric>var_spn_abun_tadpoles</metric>
+    <metric>avg_spn_abun_tadpoles</metric>
+    <metric>aggregation_abun_tadpoles</metric>
+    <metric>prop_not_s_k_abun</metric>
+    <metric>avg_spn_inten_tadpoles</metric>
+    <metric>var_spn_inten_tadpoles</metric>
+    <metric>aggregation_inten_tadpoles</metric>
+    <metric>prop_not_s_k_inten</metric>
+    <metric>tad_prev</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="t-movement" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="50"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="birth_pulses" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>var_spn_inten_metas</metric>
+    <metric>aggregation_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.04"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="birth_pulses" first="1" step="1" last="3"/>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="meta_pop_size_with_and_without_bd" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="16000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="0"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="150"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="birth_pulses2" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>var_spn_inten_metas</metric>
+    <metric>aggregation_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>bd-mortality / num-metamorphosis</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.04"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="birth_pulses" first="1" step="1" last="3"/>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="300"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="baseline_smax" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>bd-mortality / num-metamorphosis</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="100"/>
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="1000000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+      <value value="0.04"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
       <value value="1"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+  <experiment name="meta_pop_size" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <metric>count turtles</metric>
-    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpond">
-      <value value="0"/>
-    </enumeratedValueSet>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="0"/>
+      <value value="1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-coverage">
       <value value="0"/>
@@ -1515,62 +2187,374 @@ NetLogo 6.2.2
     <enumeratedValueSet variable="v-efficacy">
       <value value="0"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
-      <value value="1001"/>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="400"/>
+      <value value="500"/>
+      <value value="600"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="diff_initial_meta_pop_size_with_without_Bd" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>aggregation_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="0"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="16000"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="ini-tadpoles-per-pondpatch" first="200" step="200" last="800"/>
+  </experiment>
+  <experiment name="smax_diff_starting_pop" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="100"/>
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="16000"/>
+      <value value="1000000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="400"/>
+      <value value="600"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
       <value value="1"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+  <experiment name="smax3" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <metric>count turtles</metric>
-    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpond">
-      <value value="0"/>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="1"/>
+      <value value="1000"/>
+      <value value="16000"/>
+      <value value="1000000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-coverage">
       <value value="0"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="inf-ponds">
-      <value value="0"/>
+      <value value="1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-efficacy">
       <value value="0"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
-      <value value="1001"/>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
       <value value="1"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="no_Bd_baseline" repetitions="100" runMetricsEveryStep="true">
+  <experiment name="smax_extended_time" repetitions="25" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpond">
-      <value value="0"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="1"/>
+      <value value="1000"/>
+      <value value="16000"/>
+      <value value="1000000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+      <value value="150"/>
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-coverage">
       <value value="0"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="inf-ponds">
-      <value value="0"/>
+      <value value="1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="v-efficacy">
       <value value="0"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
-      <value value="1001"/>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="nponds">
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
       <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="est0.45_meta_pop_size_with_and_without_bd" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="3000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="0"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="vary_est" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0"/>
+      <value value="0.15"/>
+      <value value="0.3"/>
+      <value value="0.45"/>
+      <value value="0.6"/>
+      <value value="0.75"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="562smax_meta_pop_size_with_and_without_bd2" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>aggregation_inten_metas</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="0"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.1"/>
+      <value value="0.15"/>
+      <value value="0.2"/>
+      <value value="0.25"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
