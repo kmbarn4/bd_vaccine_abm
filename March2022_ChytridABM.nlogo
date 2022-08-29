@@ -260,7 +260,8 @@ to go
         ]
         max-bd-tadpole-shedding
     ]
-    let bd-metamorphs metamorphs with [ bd = 1 ]
+
+  let bd-metamorphs metamorphs with [ bd = 1 ]
     ask bd-metamorphs
     [
      update-infections
@@ -272,12 +273,13 @@ to go
       ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
         ;set color red
         ;]
-       set spn spn - round(0.09 * spn)
+       ;set spn spn - round(0.09 * spn)
+      set spn spn - round(baseline_spn_clearance * exp(c_clear * imm)* spn)
       if spn = 0 [            ;uninfected metamorphs appear green
         set bd 0
         set color green
         ]
-      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+      let zsp-release round (baseline_shedding * exp(-(c_shedding) * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
       let f-selfinfect round (0.1 * zsp-release)                ;fraction of the released zoospores that immediately encounter the host - SELF EXPOSURE
       set pz0 f-selfinfect * est ;pz0 + 1                        ;SELF-INFECTION
      ask patch-here [
@@ -358,7 +360,8 @@ to initialize-tadpole-pop
     set spn 0
     set imm random 100
     set s_k  10000
-    set est baseline_est
+    set est baseline_est * exp(-(c_est) * imm)
+    ;c_est is a constant determining the scale of imm parameter's impact on establishment parameter
     set expo 0.25
    ; set expo 0.07 ; exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
@@ -384,7 +387,7 @@ to initialize-tadpole-pop
     set spn 0
     set imm random 100
     set s_k  10000
-    set est baseline_est
+    set est baseline_est * exp(-(c_est) * imm)
     set expo 0.25
     ;set expo 0.07 ;exposure rate
     set infprob est * expo
@@ -409,7 +412,7 @@ to initialize-tadpole-pop
     set spn 0
     set imm random 100
     set s_k  10000
-    set est baseline_est
+    set est baseline_est * exp(-(c_est) * imm)
     set expo 0.25
     ;set expo 0.07  ; exposure rate
     set infprob est * expo
@@ -449,7 +452,7 @@ to initialize-tadpole-pop_2
     set spn 0
     set imm random 100
     set s_k  10000
-    set est baseline_est
+    set est baseline_est * exp(-(c_est) * imm)
     set expo 0.25
    ; set expo 0.07 ;exposure rate
     set infprob est * expo
@@ -474,7 +477,7 @@ to initialize-tadpole-pop_2
     set spn 0
     set imm random 100
     set s_k  10000
-    set est baseline_est
+    set est baseline_est * exp(-(c_est) * imm)
     set expo 0.25
     ;set expo 0.07  ;exposure rate
     set infprob est * expo
@@ -502,7 +505,7 @@ to initialize-tadpole-pop_3
     set spn 0
     set imm random 100
     set s_k  10000
-    set est baseline_est
+    set est baseline_est * exp(-(c_est) * imm)
     set expo 0.25
     ;set expo 0.07 ;exposure rate: amount of the environmental untis per host per day (units = liters per host per day), like a search term
                                   ;functions as a removal rate of parasites from the environemnt due to contact process
@@ -600,10 +603,10 @@ to metamorphosis
              set pz5 [ pz5 ] of myself
              set pz6 [ pz6 ] of myself
              set pz7 [ pz7 ] of myself
-             set spn [ spn ] of myself   ;**look up conversion factor from McMahon & Rohr 2015 for this but starting with 50% for now** maintain spn load proportional to tadpole infection intensity
+             set spn [ spn ] of myself   ; maintain tadpole infection intensity loads
 
     ]
-          set smax baseline_smax
+          set smax baseline_smax * exp(c_smax * imm)    ;defining smax as a function of immune status
           set shape "frog top"
           set size 0.4
           set color brown
@@ -613,8 +616,10 @@ to metamorphosis
 end
 
 to tadpole-zsp-shedding-and-reinfection
-      set spn spn - round(0.09 * spn)
-      let zsp-release round (spn * 17.8)                         ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+      ;set spn spn - round(0.09 * spn)
+      set spn spn - round(baseline_spn_clearance * exp(c_clear * imm)* spn)
+      ;let zsp-release round (spn * 17.8)
+      let zsp-release round (baseline_shedding * exp(-(c_shedding) * imm)* spn)  ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
       let f-selfinfect round (0.1 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
       set pz0 f-selfinfect * est ;pz0 + 1
       let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
@@ -628,8 +633,12 @@ to tadpole-zsp-shedding-and-reinfection
 end
 
 to max-bd-tadpole-shedding
-       set spn spn - round(0.09 * spn)
-      let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+     ; set base_spn_clearance 0.09
+     ; set spn spn - round(0.09 * spn)
+      set spn spn - round(baseline_spn_clearance * exp(c_clear * imm)* spn)
+
+      ;let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
+     let zsp-release round (baseline_shedding * exp(-(c_shedding) * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
 
       let f-selfinfect round (0.1 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
                                                                     ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
@@ -807,10 +816,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-15
-339
-276
-372
+14
+250
+275
+283
 Bd-inf-tadpoles-per-infpondpatch
 Bd-inf-tadpoles-per-infpondpatch
 0
@@ -902,10 +911,10 @@ PENS
 "default" 1.0 0 -16777216 true "" "plot sum [ zsp ] of patches"
 
 SLIDER
-15
-410
-187
-443
+509
+554
+681
+587
 v-coverage
 v-coverage
 0
@@ -917,10 +926,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-14
-458
-186
-491
+326
+555
+498
+588
 v-efficacy
 v-efficacy
 0
@@ -999,10 +1008,10 @@ count metamorphs
 11
 
 MONITOR
-1158
-66
-1290
-111
+1246
+124
+1378
+169
 Infected metamorphs
 count metamorphs with [ bd = 1 ]
 17
@@ -1065,10 +1074,10 @@ PENS
 "default" 1.0 1 -16777216 true "" "histogram [ spn ] of metamorphs with [bd = 1]"
 
 PLOT
-221
-388
-421
-538
+1261
+436
+1461
+586
 pz0 per metamorph
 pz0 per meta
 no. metamorphs
@@ -1083,10 +1092,10 @@ PENS
 "default" 1.0 1 -16777216 true "" "histogram [ pz0 ] of metamorphs"
 
 PLOT
-435
-388
-635
-538
+1265
+282
+1465
+432
 pz0 per tadpole
 pz0 per tadpole
 no. tadpoles
@@ -1119,25 +1128,25 @@ PENS
 "zsp" 1.0 0 -16777216 true "" "plot sum [ zsp ] of patches"
 
 SLIDER
-702
-466
-874
-499
+18
+481
+190
+514
 t-movement
 t-movement
 0
 1
-0.25
+0.0
 0.25
 1
 NIL
 HORIZONTAL
 
 SLIDER
-703
-511
-875
-544
+19
+522
+191
+555
 m-land
 m-land
 0
@@ -1149,10 +1158,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-702
-556
-874
-589
+15
+413
+187
+446
 meta-mort
 meta-mort
 0
@@ -1164,10 +1173,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-514
-556
-686
-589
+14
+372
+186
+405
 tad-mort
 tad-mort
 0
@@ -1179,10 +1188,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-885
-506
-995
-551
+39
+564
+149
+609
 % metas on land
 count metamorphs with [on-land = 1] / count metamorphs
 2
@@ -1212,10 +1221,10 @@ count patches with [pp = 1]
 11
 
 MONITOR
-1245
-124
-1372
-169
+1249
+12
+1376
+57
 NIL
 num-metamorphosis
 17
@@ -1244,22 +1253,11 @@ baseline-mortality
 1
 11
 
-MONITOR
-1256
-286
-1343
-331
-meta pop size
-num-metamorphosis - (baseline-mortality + bd-mortality)
-17
-1
-11
-
 SLIDER
-17
-508
-189
-541
+353
+386
+525
+419
 baseline_smax
 baseline_smax
 0
@@ -1286,16 +1284,106 @@ NIL
 HORIZONTAL
 
 SLIDER
-14
-251
-186
-284
+352
+460
+524
+493
 baseline_est
 baseline_est
 0
 1
 0.25
 0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+352
+423
+536
+456
+baseline_spn_clearance
+baseline_spn_clearance
+0
+1
+0.09
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+538
+422
+642
+455
+c_clear
+c_clear
+0
+100
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+538
+461
+644
+494
+c_est
+c_est
+0
+100
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+538
+385
+641
+418
+c_smax
+c_smax
+0
+100
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+351
+498
+523
+531
+baseline_shedding
+baseline_shedding
+0
+100
+17.8
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+537
+499
+644
+532
+c_shedding
+c_shedding
+0
+100
+0.0
+1
 1
 NIL
 HORIZONTAL
