@@ -195,7 +195,7 @@ to go
   ]
   ]
   if ticks = vaccination-day [
-    let num-vaccinate v-coverage * (count tadpoles)
+    let num-vaccinate v-coverage * count tadpoles]
   ask n-of num-vaccinate tadpoles [
     set imm v-efficacy - (0.5 * relative_variation * v-coverage) + random-float (relative_variation * v-efficacy)
     ]
