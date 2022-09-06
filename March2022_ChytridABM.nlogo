@@ -257,6 +257,7 @@ to go
       tadpole-zsp-shedding-and-reinfection
       if spn = 0 [
       set bd 0
+      set imm imm + natural_imm_efficacy                            ;updating immunity with acquired resistance provided by clearing a natural infection
       set color green
         ]
         ]
@@ -285,6 +286,7 @@ to go
       set spn spn - round(baseline_spn_clearance * exp(c_clear * imm)* spn)
       if spn = 0 [            ;uninfected metamorphs appear green
         set bd 0
+        set imm imm + natural_imm_efficacy                            ;updating immunity with acquired resistance provided by clearing a natural infection
         set color green
         ]
       let zsp-release round (baseline_shedding * exp(-(c_shedding) * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
@@ -1412,16 +1414,31 @@ NIL
 HORIZONTAL
 
 SLIDER
-234
-582
-407
-615
+419
+581
+592
+614
 vaccination-day
 vaccination-day
 0
 90
 1.0
 1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+235
+581
+408
+614
+natural_imm_efficacy
+natural_imm_efficacy
+0
+1
+0.0
+0.1
 1
 NIL
 HORIZONTAL
