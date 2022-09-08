@@ -277,11 +277,7 @@ to go
       ;if spn >= 8000 [      ;metamorphs nearing bd-induced mortality appear red
         ;set color red
         ;]
-      ;set spn round(exp(- (baseline_spn_clearance) * exp(c_clear * imm) * 1)) * spn
-       ; binomial draw from probability of sporangia clearance to determine how many sporangia survive to the next time step
-       let n spn
-       let p exp(- (baseline_spn_clearance) * exp(c_clear * imm))
-       set spn length filter [i -> i < p] n-values n [random-float 1]
+      set spn round(exp(- (baseline_spn_clearance) * exp(c_clear * imm) * 1)) * spn
       if spn = 0 [            ;uninfected metamorphs appear green
         set bd 0
         set imm imm + natural_imm_efficacy                            ;update immunity with natural resistance acquired by clearing an infection
@@ -650,10 +646,7 @@ end
 
 to max-bd-tadpole-shedding
      ;set spn round(exp(- (baseline_spn_clearance) * exp(c_clear * imm) * 1)) * spn
-     ; binomial draw from probability of sporangia clearance to determine how many sporangia survive to the next time step
-       let n spn
-       let p exp(- (baseline_spn_clearance) * exp(c_clear * imm))
-       set spn length filter [i -> i < p] n-values n [random-float 1]
+
      if spn = 0 [            ;uninfected metamorphs appear green
         set bd 0
         set imm imm + natural_imm_efficacy                            ;update immunity with natural resistance acquired by clearing an infection
