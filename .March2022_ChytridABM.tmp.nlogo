@@ -26,6 +26,7 @@ globals
   aggregation_inten_metas
   metas_prev
   prop_deaths_due_to_bd                       ;proportion of metamorph deaths attributable to Bd = bd-mortality / (bd-mortality + baseline-mortality)
+  total-zsp-density
 ]
 
 breed [ tadpoles tadpole ]
@@ -198,9 +199,14 @@ to go
     let num-vaccinate round(v-coverage * (count tadpoles))
   ask n-of num-vaccinate tadpoles [
     set imm v-efficacy - (0.5 * relative_variation * v-coverage) + random-float (relative_variation * v-efficacy)
+    set est baseline_est * exp(c_est * imm)
     ]
   ]
-
+;  ask tadpoles [
+;    print imm
+;  ]
+;  print mean [imm] of tadpoles
+    ;print [est] of tadpoles
   ask metamorphs [
     set aid aid + 1                   ;adding a day to the metamorph's age
     if random-float 1 < meta-mort [    ;meta_mort is a scale of mortality probabilities
@@ -287,7 +293,7 @@ to go
         set imm imm + natural_imm_efficacy                            ;update immunity with natural resistance acquired by clearing an infection
         set color green
         ]
-      let zsp-release round (baseline_shedding * exp(-(c_shedding) * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
+      let zsp-release round (baseline_shedding * exp(c_shedding * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
       let f-selfinfect round (0.1 * zsp-release)                ;fraction of the released zoospores that immediately encounter the host - SELF EXPOSURE
       set pz0 f-selfinfect * est ;pz0 + 1                        ;SELF-INFECTION
      ask patch-here [
@@ -301,6 +307,9 @@ to go
     ]
   ;make netlogo plot here
  plot-zsp
+  let zsp-environment count patches with [pp = 1]
+  set total-zsp-density  sum [zsp] of patches with [pp = 1] / zsp-environment
+  print total-zsp-density
 ; ask patches with [zsp > 0] [  ;both land and pond patches are infectious
   ask patches with [zsp > 0 and pond = 1] [  ;only pond patches are infectious
   infection-step
@@ -366,7 +375,7 @@ to initialize-tadpole-pop
     set shape "frog top"
     set size 0.2
     set spn 0
-    set imm random 100
+    set imm 0
     set s_k  10000
     set est baseline_est * exp(c_est * imm)
     ;c_est is a constant determining the scale of imm parameter's impact on establishment parameter
@@ -393,7 +402,7 @@ to initialize-tadpole-pop
     set shape "frog top"
     set size 0.2
     set spn 0
-    set imm random 100
+    set imm 0
     set s_k  10000
     set est baseline_est * exp(c_est * imm)
     set expo 0.25
@@ -418,7 +427,7 @@ to initialize-tadpole-pop
     set shape "frog top"
     set size 0.2
     set spn 0
-    set imm random 100
+    set imm 0
     set s_k  10000
     set est baseline_est * exp(c_est * imm)
     set expo 0.25
@@ -458,7 +467,7 @@ to initialize-tadpole-pop_2
     set shape "frog top"
     set size 0.2
     set spn 0
-    set imm random 100
+    set imm 0
     set s_k  10000
     set est baseline_est * exp(c_est * imm)
     set expo 0.25
@@ -483,7 +492,7 @@ to initialize-tadpole-pop_2
     set shape "frog top"
     set size 0.2
     set spn 0
-    set imm random 100
+    set imm 0
     set s_k  10000
     set est baseline_est * exp(c_est * imm)
     set expo 0.25
@@ -511,7 +520,7 @@ to initialize-tadpole-pop_3
     set shape "frog top"
     set size 0.2
     set spn 0
-    set imm random 100
+    set imm 0
     set s_k  10000
     set est baseline_est * exp(c_est * imm)
     set expo 0.25
@@ -572,6 +581,7 @@ ask metamorphs [                                                             ;al
     move-to one-of patches with [ pond = 1  and pp = 1]
     ]
 end
+
 
 to update-infections
   let z1 pz0             ;upon establishment, a zoospore takes ~7 days to mature into a sporangia
@@ -635,7 +645,7 @@ to tadpole-zsp-shedding-and-reinfection
         set color green
         ]
       ;let zsp-release round (spn * 17.8)
-      let zsp-release round (baseline_shedding * exp(c_shedding) * imm)* spn)  ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
+      let zsp-release round (baseline_shedding * exp(c_shedding * imm)* spn)  ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
       let f-selfinfect round (0.1 * zsp-release)                ;fraction of the released zoospores that immediately self-infect the host
       set pz0 f-selfinfect * est ;pz0 + 1
       let same-patch-zsp round (0.4 * (zsp-release - f-selfinfect)) ;40% of zoospores in pool deposited into the patch the tadpole is currently on
@@ -660,7 +670,7 @@ to max-bd-tadpole-shedding
         set color green
         ]
       ;let zsp-release round (spn * 17.8)                             ;zoospore release rate at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI)
-     let zsp-release round (baseline_shedding * exp(-(c_shedding) * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
+     let zsp-release round (baseline_shedding * exp(c_shedding * imm)* spn) ;baseline zoospore release rate 17.8 per spn per day at 23 degrees C (Woodhams et al., 2008; Briggs 2010 SI), but as a function of immunity
 
       let f-selfinfect round (0.1 * zsp-release)                   ;fraction of the released zoospores that immediately self-infect the host
                                                                     ;because these tadpoles have maxxed out their infection loads, these f-selfinfect zoospores do not actually establish pz0
@@ -831,7 +841,7 @@ ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
 1000
-500.0
+100.0
 10
 1
 NIL
@@ -846,7 +856,7 @@ Bd-inf-tadpoles-per-infpondpatch
 Bd-inf-tadpoles-per-infpondpatch
 0
 10
-1.0
+10.0
 1
 1
 NIL
@@ -941,7 +951,7 @@ v-coverage
 v-coverage
 0
 1
-1.0
+0.0
 0.1
 1
 NIL
@@ -1374,7 +1384,7 @@ c_smax
 c_smax
 0
 5
-0.0
+0.688
 1
 1
 NIL
@@ -1404,7 +1414,7 @@ c_shedding
 c_shedding
 0
 100
--1.609
+0.0
 1
 1
 NIL
@@ -3085,7 +3095,7 @@ NetLogo 6.2.2
       <value value="-2.303"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="september_abm-c_est" repetitions="25" runMetricsEveryStep="false">
+  <experiment name="september_abm-c_est" repetitions="10" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -3164,6 +3174,431 @@ NetLogo 6.2.2
       <value value="-0.693"/>
       <value value="-1.609"/>
       <value value="-2.303"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_shedding">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="c_clear_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>aggregation_inten_metas</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_spn_clearance">
+      <value value="0.09"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_shedding">
+      <value value="17.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+      <value value="0.25"/>
+      <value value="0.5"/>
+      <value value="0.75"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="vaccination-day">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="relative_variation">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="natural_imm_efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_smax">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_clear">
+      <value value="0.223"/>
+      <value value="0.405"/>
+      <value value="0.56"/>
+      <value value="0.688"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_est">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_shedding">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="c_est_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>aggregation_inten_metas</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_spn_clearance">
+      <value value="0.09"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_shedding">
+      <value value="17.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+      <value value="0.25"/>
+      <value value="0.5"/>
+      <value value="0.75"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="vaccination-day">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="relative_variation">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="natural_imm_efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_smax">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_clear">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_est">
+      <value value="-0.288"/>
+      <value value="-0.693"/>
+      <value value="-1.386"/>
+      <value value="-4.605"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_shedding">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="short_cov_est1" repetitions="30" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>aggregation_inten_metas</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_spn_clearance">
+      <value value="0.09"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_shedding">
+      <value value="17.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+      <value value="0.25"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="vaccination-day">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="relative_variation">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="natural_imm_efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_smax">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_clear">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_est">
+      <value value="-4.605"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_shedding">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="c_shedding_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>aggregation_inten_metas</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_spn_clearance">
+      <value value="0.09"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_shedding">
+      <value value="17.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+      <value value="0.25"/>
+      <value value="0.5"/>
+      <value value="0.75"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="vaccination-day">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="relative_variation">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="natural_imm_efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_smax">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_clear">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_est">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_shedding">
+      <value value="-0.288"/>
+      <value value="-0.693"/>
+      <value value="-1.386"/>
+      <value value="-4.605"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="c_smax_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="90"/>
+    <metric>count metamorphs</metric>
+    <metric>prop_deaths_due_to_bd</metric>
+    <metric>avg_spn_inten_metas</metric>
+    <metric>metas_prev</metric>
+    <metric>aggregation_inten_metas</metric>
+    <enumeratedValueSet variable="SimplePond">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="last-day">
+      <value value="90"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="birth_pulses">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ini-tadpoles-per-pondpatch">
+      <value value="500"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Bd-inf-tadpoles-per-infpondpatch">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="inf-ponds">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="tad-mort">
+      <value value="0.06"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="meta-mort">
+      <value value="0.02"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="t-movement">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="m-land">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_smax">
+      <value value="562"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_spn_clearance">
+      <value value="0.09"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_est">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="baseline_shedding">
+      <value value="17.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-efficacy">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="v-coverage">
+      <value value="0"/>
+      <value value="0.25"/>
+      <value value="0.5"/>
+      <value value="0.75"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="vaccination-day">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="relative_variation">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="natural_imm_efficacy">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_smax">
+      <value value="0.223"/>
+      <value value="0.405"/>
+      <value value="0.56"/>
+      <value value="0.688"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_clear">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c_est">
+      <value value="0"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="c_shedding">
       <value value="0"/>
