@@ -27,6 +27,7 @@ globals
   metas_prev
   prop_deaths_due_to_bd                       ;proportion of metamorph deaths attributable to Bd = bd-mortality / (bd-mortality + baseline-mortality)
   total-zsp-density
+  realized-coverage                           ;actual proportion of tadpoles that are immunized
 ]
 
 breed [ tadpoles tadpole ]
@@ -64,9 +65,9 @@ metamorphs-own
   pz5
   pz6
   pz7
-  vac
   b_cohort                                       ;specifies birth cohort
   on-land                                        ;move to a land patch
+  immunized                                       ;1 if immunity is from vaccine, 0 if unvaccinated or vaccine ineffective at inducing an immune response
 ]
 
 tadpoles-own
@@ -88,8 +89,8 @@ tadpoles-own
   pz5
   pz6
   pz7
-  vac
   b_cohort                                      ;specifies birth cohort if modeling birth pulses
+  immunized                                     ;1 if immunity is from vaccine, 0 if unvaccinated or vaccine ineffective at inducing an immune response
 ]
 
 to setup
@@ -197,10 +198,16 @@ to go
   ]
   if ticks = vaccination-day [
     let num-vaccinate round(v-coverage * (count tadpoles))
-  ask n-of num-vaccinate tadpoles [
+    ask n-of num-vaccinate tadpoles [
+    if bd = 0 [
     set imm v-efficacy - (0.5 * relative_variation * v-coverage) + random-float (relative_variation * v-efficacy)
     set est baseline_est * exp(c_est * imm)
+    set immunized 1
     ]
+    let vac-immunized-tadpoles count tadpoles with [immunized = 1]
+    set realized-coverage vac-immunized-tadpoles / (count tadpoles)
+    ]
+    print realized-coverage
   ]
 ;  ask tadpoles [
 ;    print imm
@@ -309,7 +316,7 @@ to go
  plot-zsp
   let zsp-environment count patches with [pp = 1]
   set total-zsp-density total-zsp-density + round(sum [zsp] of patches with [pp = 1] / zsp-environment)
-  print total-zsp-density
+  ;print total-zsp-density
 ; ask patches with [zsp > 0] [  ;both land and pond patches are infectious
   ask patches with [zsp > 0 and pond = 1] [  ;only pond patches are infectious
   infection-step
@@ -611,6 +618,7 @@ to metamorphosis
           set expo [expo] of myself
           set est [est] of myself
           set infprob [infprob] of myself
+          set immunized [immunized] of myself
 ;          set new-pz0 [new-pz0] of myself
           if bd = 1 [
              set pz0 [ pz0 ] of myself   ;trying 100% carryover of Bd infections through metamorphosis
@@ -811,7 +819,7 @@ BUTTON
 72
 Go
 go
-T
+NIL
 1
 T
 OBSERVER
@@ -841,7 +849,7 @@ ini-tadpoles-per-pondpatch
 ini-tadpoles-per-pondpatch
 0
 1000
-100.0
+2.0
 10
 1
 NIL
@@ -856,7 +864,7 @@ Bd-inf-tadpoles-per-infpondpatch
 Bd-inf-tadpoles-per-infpondpatch
 0
 10
-10.0
+1.0
 1
 1
 NIL
@@ -951,7 +959,7 @@ v-coverage
 v-coverage
 0
 1
-0.0
+1.0
 0.1
 1
 NIL
@@ -1464,6 +1472,17 @@ natural_imm_efficacy
 1
 NIL
 HORIZONTAL
+
+MONITOR
+1146
+65
+1317
+110
+realized vaccine coverage
+realized-coverage
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -3179,7 +3198,7 @@ NetLogo 6.2.2
       <value value="0"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="c_clear_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+  <experiment name="c_clear_vs_coverage" repetitions="100" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -3188,6 +3207,8 @@ NetLogo 6.2.2
     <metric>avg_spn_inten_metas</metric>
     <metric>metas_prev</metric>
     <metric>aggregation_inten_metas</metric>
+    <metric>realized-coverage</metric>
+    <metric>total-zsp-density</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
     </enumeratedValueSet>
@@ -3265,7 +3286,7 @@ NetLogo 6.2.2
       <value value="0"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="c_est_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+  <experiment name="c_est_vs_coverage" repetitions="100" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -3274,6 +3295,8 @@ NetLogo 6.2.2
     <metric>avg_spn_inten_metas</metric>
     <metric>metas_prev</metric>
     <metric>aggregation_inten_metas</metric>
+    <metric>realized-coverage</metric>
+    <metric>total-zsp-density</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
     </enumeratedValueSet>
@@ -3432,7 +3455,7 @@ NetLogo 6.2.2
       <value value="0"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="c_shedding_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+  <experiment name="c_shedding_vs_coverage" repetitions="100" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -3441,6 +3464,8 @@ NetLogo 6.2.2
     <metric>avg_spn_inten_metas</metric>
     <metric>metas_prev</metric>
     <metric>aggregation_inten_metas</metric>
+    <metric>realized-coverage</metric>
+    <metric>total-zsp-density</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
     </enumeratedValueSet>
@@ -3518,7 +3543,7 @@ NetLogo 6.2.2
       <value value="-4.605"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="c_smax_vs_coverage" repetitions="25" runMetricsEveryStep="false">
+  <experiment name="c_smax_vs_coverage" repetitions="100" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="90"/>
@@ -3527,6 +3552,8 @@ NetLogo 6.2.2
     <metric>avg_spn_inten_metas</metric>
     <metric>metas_prev</metric>
     <metric>aggregation_inten_metas</metric>
+    <metric>realized-coverage</metric>
+    <metric>total-zsp-density</metric>
     <enumeratedValueSet variable="SimplePond">
       <value value="false"/>
     </enumeratedValueSet>
